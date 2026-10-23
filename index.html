@@ -1,0 +1,1126 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Planificador Dinámico de Oposiciones</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        renfe: {
+                            purple: '#662483',
+                            purpleDark: '#4A1862',
+                            purpleLight: '#8A32B0',
+                            accent: '#E30613',
+                            accentHover: '#C00510',
+                            bgGray: '#F8FAFC'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+        
+        * {
+            -webkit-tap-highlight-color: transparent;
+            box-sizing: border-box;
+        }
+
+        body { 
+            font-family: 'Inter', sans-serif;
+            touch-action: manipulation;
+        }
+        
+        /* Custom Mobile Scrollbars */
+        ::-webkit-scrollbar { height: 4px; width: 4px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        /* Ensure interactive minimum touch targets */
+        .touch-target {
+            min-height: 44px;
+            min-width: 44px;
+        }
+
+        @media print {
+            .no-print { display: none !important; }
+            body { background: white !important; color: black !important; font-size: 10pt; padding-bottom: 0 !important; }
+            .print-card { break-inside: avoid; border: 1px solid #cbd5e1 !important; box-shadow: none !important; }
+            .bg-renfe-purple { background-color: #662483 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-full flex flex-col pb-20 md:pb-6 transition-colors duration-200">
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="fixed top-4 right-4 left-4 sm:left-auto sm:max-w-sm z-50 flex flex-col gap-2 pointer-events-none no-print"></div>
+
+    <!-- Header Principal Responsive -->
+    <header class="bg-renfe-purple text-white shadow-md no-print sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-3 py-2.5 sm:px-4 sm:py-3 flex justify-between items-center gap-2">
+            <div class="flex items-center space-x-2 sm:space-x-3 min-w-0">
+                <div class="bg-white/10 border border-white/20 text-white p-2 rounded-xl font-bold text-base tracking-wide shadow-sm flex items-center justify-center shrink-0">
+                    <i class="fa-solid fa-graduation-cap text-amber-300 text-lg sm:text-xl"></i>
+                </div>
+                <div class="min-w-0">
+                    <h1 class="text-sm sm:text-base font-bold leading-tight truncate">Planificador de Oposiciones</h1>
+                    <p class="text-[10px] sm:text-[11px] text-purple-200 truncate">Adaptativo y Móvil 100%</p>
+                </div>
+            </div>
+            
+            <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                <button onclick="toggleConfigAccordion()" class="md:hidden px-2.5 py-2 bg-purple-800/90 text-white text-xs font-semibold rounded-xl border border-purple-400/30 flex items-center gap-1 touch-target">
+                    <i class="fa-solid fa-sliders text-amber-300"></i>
+                    <span class="hidden xs:inline">Ajustes</span>
+                </button>
+                
+                <div class="hidden md:flex items-center gap-2">
+                    <button onclick="openImportModal()" class="px-3 py-2 bg-purple-800/80 hover:bg-purple-800 text-white text-xs font-semibold rounded-xl border border-purple-400/30 transition flex items-center gap-1.5 touch-target">
+                        <i class="fa-solid fa-database"></i> JSON
+                    </button>
+                    <button onclick="exportCSV()" class="px-3 py-2 bg-purple-800/80 hover:bg-purple-800 text-white text-xs font-semibold rounded-xl border border-purple-400/30 transition flex items-center gap-1.5 touch-target">
+                        <i class="fa-solid fa-file-csv"></i> Excel
+                    </button>
+                    <button onclick="window.print()" class="px-3 py-2 bg-white text-renfe-purple hover:bg-purple-50 text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-sm touch-target">
+                        <i class="fa-solid fa-print"></i> PDF
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 max-w-7xl w-full mx-auto px-3 py-3 sm:px-4 sm:py-5 space-y-4 sm:space-y-5">
+
+        <!-- Banner Alerta de Retrasos -->
+        <section id="overdue-banner" class="hidden bg-amber-50 border-2 border-amber-300 rounded-2xl p-3.5 sm:p-4 shadow-sm no-print">
+            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 text-base font-bold">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-xs sm:text-sm font-bold text-amber-900" id="overdue-count-text">Tienes tareas pendientes atrasadas</h2>
+                        <p class="text-[11px] sm:text-xs text-amber-700">Redistribúyelas para ajustar el resto de repasos.</p>
+                    </div>
+                </div>
+                <button onclick="redistributeOverdueTasks()" class="w-full sm:w-auto px-4 py-2.5 bg-amber-600 active:bg-amber-700 text-white text-xs font-bold rounded-xl shadow transition flex items-center justify-center gap-2 touch-target shrink-0">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> Redistribuir Atrasos
+                </button>
+            </div>
+        </section>
+
+        <!-- Formulario de Configuración / Acordeón en Móvil -->
+        <section id="config-section" class="bg-white rounded-2xl p-3.5 sm:p-5 shadow-sm border border-slate-200/90 no-print transition-all">
+            <div class="flex justify-between items-center cursor-pointer md:cursor-default" onclick="if(window.innerWidth < 768) toggleConfigAccordion()">
+                <h2 class="text-xs sm:text-sm font-bold text-slate-800 flex items-center gap-2">
+                    <i class="fa-solid fa-sliders text-renfe-purple text-sm sm:text-base"></i> Configuración de Estudio
+                </h2>
+                <div class="flex items-center gap-2">
+                    <button type="button" onclick="event.stopPropagation(); resetAllData()" class="text-[11px] text-red-600 hover:text-red-800 font-semibold flex items-center gap-1 px-2 py-1">
+                        <i class="fa-solid fa-rotate-left"></i> Reset
+                    </button>
+                    <i id="config-chevron" class="fa-solid fa-chevron-down text-slate-400 text-xs md:hidden transition-transform"></i>
+                </div>
+            </div>
+
+            <form id="planner-form" onsubmit="saveSettingsAndRecalculate(event)" class="mt-3 md:mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 hidden md:grid">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">
+                        <i class="fa-solid fa-book mr-1 text-renfe-purple"></i> Nº Total de Temas
+                    </label>
+                    <input type="number" id="input-topics" min="1" max="300" value="20" required class="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-renfe-purple focus:outline-none touch-target">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">
+                        <i class="fa-solid fa-calendar-day mr-1 text-renfe-purple"></i> Fecha Inicio del Plan
+                    </label>
+                    <input type="date" id="input-start-date" required class="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-renfe-purple focus:outline-none touch-target">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">
+                        <i class="fa-solid fa-gauge-high mr-1 text-renfe-purple"></i> Ritmo Nuevos / Día
+                    </label>
+                    <select id="input-pace" class="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-renfe-purple focus:outline-none touch-target">
+                        <option value="1">1 tema nuevo por día hábil</option>
+                        <option value="0.5">1 tema nuevo cada 2 días hábiles</option>
+                        <option value="2">2 temas nuevos por día hábil</option>
+                        <option value="0.33">1 tema nuevo cada 3 días hábiles</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">
+                        <i class="fa-solid fa-bed mr-1 text-renfe-purple"></i> Días de Descanso
+                    </label>
+                    <select id="input-rest-days" class="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-renfe-purple focus:outline-none touch-target">
+                        <option value="6,0">Sábado y Domingo (Estudio L-V)</option>
+                        <option value="0,1">Domingo y Lunes (Estudio M-S)</option>
+                        <option value="5,6">Viernes y Sábado (Estudio D-J)</option>
+                    </select>
+                </div>
+
+                <div class="sm:col-span-2 lg:col-span-4 flex flex-col sm:flex-row justify-between items-center gap-2 pt-2 border-t border-slate-100">
+                    <div class="flex items-center gap-2 w-full sm:w-auto md:hidden">
+                        <button type="button" onclick="openImportModal()" class="flex-1 px-3 py-2 bg-slate-100 text-slate-700 text-xs font-semibold rounded-xl flex items-center justify-center gap-1 touch-target">
+                            <i class="fa-solid fa-database"></i> JSON
+                        </button>
+                        <button type="button" onclick="exportCSV()" class="flex-1 px-3 py-2 bg-slate-100 text-slate-700 text-xs font-semibold rounded-xl flex items-center justify-center gap-1 touch-target">
+                            <i class="fa-solid fa-file-csv"></i> Excel
+                        </button>
+                    </div>
+                    
+                    <button type="submit" class="w-full sm:w-auto px-5 py-2.5 bg-renfe-purple active:bg-renfe-purpleDark text-white font-bold text-xs rounded-xl shadow transition-all flex items-center justify-center gap-2 touch-target">
+                        <i class="fa-solid fa-arrows-rotate"></i> Recalcular Plan
+                    </button>
+                </div>
+            </form>
+        </section>
+
+        <!-- Estadísticas de Ajuste Adaptativo -->
+        <section class="bg-white rounded-2xl p-3 sm:p-4 shadow-sm border border-slate-200">
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 sm:gap-3 text-center">
+                <div class="p-2 sm:p-2.5 bg-purple-50 rounded-xl border border-purple-100 flex flex-col justify-center">
+                    <p class="text-[9px] sm:text-[10px] font-bold uppercase text-purple-600 tracking-wider">Avance Global</p>
+                    <p id="stat-progress-pct" class="text-lg sm:text-xl font-black text-purple-900">0%</p>
+                    <div class="w-full bg-purple-200 h-1.5 rounded-full mt-1 overflow-hidden">
+                        <div id="stat-progress-bar" class="bg-renfe-purple h-full w-0 transition-all duration-500"></div>
+                    </div>
+                </div>
+
+                <div class="p-2 sm:p-2.5 bg-emerald-50 rounded-xl border border-emerald-100 flex flex-col justify-center">
+                    <p class="text-[9px] sm:text-[10px] font-bold uppercase text-emerald-600 tracking-wider">Completado</p>
+                    <p id="stat-completed-count" class="text-lg sm:text-xl font-black text-emerald-900">0 / 0</p>
+                    <p class="text-[9px] text-emerald-700 mt-0.5">Repaso espaciado</p>
+                </div>
+
+                <div class="p-2 sm:p-2.5 bg-blue-50 rounded-xl border border-blue-100 flex flex-col justify-center">
+                    <p class="text-[9px] sm:text-[10px] font-bold uppercase text-blue-600 tracking-wider">Fin Estimado</p>
+                    <p id="stat-estimated-end" class="text-xs sm:text-sm font-black text-blue-900 mt-0.5">-</p>
+                    <p id="stat-end-delay" class="text-[9px] text-blue-700 mt-0.5">Con descansos</p>
+                </div>
+
+                <div class="p-2 sm:p-2.5 bg-amber-50 rounded-xl border border-amber-100 flex flex-col justify-center">
+                    <p class="text-[9px] sm:text-[10px] font-bold uppercase text-amber-600 tracking-wider">Reajustes</p>
+                    <p id="stat-recalculates-count" class="text-lg sm:text-xl font-black text-amber-900">0</p>
+                    <p class="text-[9px] text-amber-700 mt-0.5">Adaptaciones</p>
+                </div>
+
+                <div class="p-2 sm:p-2.5 bg-slate-100 rounded-xl border border-slate-200 col-span-2 sm:col-span-1 flex flex-col justify-center">
+                    <p class="text-[9px] sm:text-[10px] font-bold uppercase text-slate-500 tracking-wider">Descansos Usados</p>
+                    <p id="stat-extra-days-count" class="text-base sm:text-lg font-black text-slate-800 mt-0.5">0 días</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Navegación Desktop -->
+        <div class="border-b border-slate-200 no-print hidden md:flex justify-between items-center">
+            <nav class="-mb-px flex space-x-4">
+                <button onclick="switchTab('daily')" id="tab-daily" class="tab-btn active border-renfe-purple text-renfe-purple border-b-2 font-bold py-2.5 px-1 text-xs sm:text-sm flex items-center gap-2">
+                    <i class="fa-solid fa-calendar-check"></i> Agenda Diaria
+                </button>
+                <button onclick="switchTab('weekly')" id="tab-weekly" class="tab-btn border-transparent text-slate-500 border-b-2 font-semibold py-2.5 px-1 text-xs sm:text-sm flex items-center gap-2">
+                    <i class="fa-solid fa-table-columns"></i> Vista Semanal
+                </button>
+                <button onclick="switchTab('topic')" id="tab-topic" class="tab-btn border-transparent text-slate-500 border-b-2 font-semibold py-2.5 px-1 text-xs sm:text-sm flex items-center gap-2">
+                    <i class="fa-solid fa-layer-group"></i> Resumen por Tema
+                </button>
+            </nav>
+            <div class="text-xs text-slate-500">
+                <span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 mr-1"></span> Persistencia Activa
+            </div>
+        </div>
+
+        <!-- VISTA 1: AGENDA DIARIA INTELIGENTE -->
+        <div id="content-daily" class="tab-content space-y-3">
+            <div class="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-2.5 no-print bg-white p-3 rounded-2xl border border-slate-200 shadow-sm">
+                <div class="flex items-center gap-2 flex-1">
+                    <div class="relative flex-1">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                        <input type="text" id="daily-search" placeholder="Buscar día o tema..." oninput="renderDailyView()" class="w-full pl-8 pr-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-renfe-purple focus:outline-none touch-target">
+                    </div>
+                    <button onclick="jumpToToday()" class="px-3 py-2 bg-purple-100 active:bg-purple-200 text-renfe-purple text-xs font-bold rounded-xl transition shrink-0 touch-target">
+                        Ir a Hoy
+                    </button>
+                </div>
+
+                <div class="flex items-center justify-between sm:justify-end gap-3 text-xs font-medium text-slate-600 pt-1 sm:pt-0 border-t sm:border-t-0 border-slate-100">
+                    <label class="flex items-center gap-1.5 cursor-pointer touch-target">
+                        <input type="checkbox" id="hide-rest-days" onchange="renderDailyView()" class="w-4 h-4 rounded text-renfe-purple focus:ring-renfe-purple"> 
+                        <span class="text-[11px] sm:text-xs">Ocultar descansos</span>
+                    </label>
+                    <label class="flex items-center gap-1.5 cursor-pointer touch-target">
+                        <input type="checkbox" id="hide-completed-days" onchange="renderDailyView()" class="w-4 h-4 rounded text-renfe-purple focus:ring-renfe-purple"> 
+                        <span class="text-[11px] sm:text-xs">Ocultar completados</span>
+                    </label>
+                </div>
+            </div>
+
+            <div id="daily-cards-container" class="space-y-3"></div>
+        </div>
+
+        <!-- VISTA 2: VISTA SEMANAL -->
+        <div id="content-weekly" class="tab-content hidden space-y-4">
+            <div id="weekly-container" class="space-y-4"></div>
+        </div>
+
+        <!-- VISTA 3: CRONOGRAMA Y ESTADO POR TEMA -->
+        <div id="content-topic" class="tab-content hidden space-y-3">
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs min-w-[600px]">
+                        <thead class="bg-slate-100 text-slate-700 border-b border-slate-200 font-bold uppercase tracking-wider">
+                            <tr>
+                                <th class="p-2.5 sm:p-3">Tema</th>
+                                <th class="p-2.5 sm:p-3 bg-purple-50 text-renfe-purple">Estudio Inicial</th>
+                                <th class="p-2.5 sm:p-3">R1 (+1d)</th>
+                                <th class="p-2.5 sm:p-3">R2 (+7d)</th>
+                                <th class="p-2.5 sm:p-3">R3 (+21d)</th>
+                                <th class="p-2.5 sm:p-3">R4 (+60d)</th>
+                                <th class="p-2.5 sm:p-3">R5 (+120d)</th>
+                                <th class="p-2.5 sm:p-3 text-center">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="topic-table-body" class="divide-y divide-slate-200"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- FIXED BOTTOM MOBILE NAVIGATION BAR -->
+    <nav class="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200 z-40 px-2 py-1 flex justify-around items-center no-print shadow-lg">
+        <button onclick="switchTab('daily')" id="mobile-nav-daily" class="mobile-nav-btn flex flex-col items-center justify-center p-1 text-renfe-purple font-bold w-1/3 touch-target">
+            <i class="fa-solid fa-calendar-check text-base mb-0.5"></i>
+            <span class="text-[10px]">Agenda</span>
+        </button>
+        <button onclick="switchTab('weekly')" id="mobile-nav-weekly" class="mobile-nav-btn flex flex-col items-center justify-center p-1 text-slate-400 font-semibold w-1/3 touch-target">
+            <i class="fa-solid fa-table-columns text-base mb-0.5"></i>
+            <span class="text-[10px]">Semanal</span>
+        </button>
+        <button onclick="switchTab('topic')" id="mobile-nav-topic" class="mobile-nav-btn flex flex-col items-center justify-center p-1 text-slate-400 font-semibold w-1/3 touch-target">
+            <i class="fa-solid fa-layer-group text-base mb-0.5"></i>
+            <span class="text-[10px]">Por Tema</span>
+        </button>
+    </nav>
+
+    <!-- Modal Importación / Exportación JSON (Mobile Bottom Sheet Style) -->
+    <div id="import-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-end sm:items-center justify-center p-0 sm:p-4 no-print">
+        <div class="bg-white rounded-t-3xl sm:rounded-2xl max-w-lg w-full p-4 sm:p-5 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                <h3 class="font-bold text-slate-800 text-xs sm:text-sm flex items-center gap-2">
+                    <i class="fa-solid fa-database text-renfe-purple"></i> Copia de Seguridad JSON
+                </h3>
+                <button onclick="closeImportModal()" class="w-8 h-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center touch-target"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <p class="text-xs text-slate-600">Copia o restaura el estado completo de tu avance y días de estudio.</p>
+
+            <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Datos JSON:</label>
+                <textarea id="json-data-area" rows="5" class="w-full p-2.5 text-[11px] font-mono bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-renfe-purple focus:outline-none"></textarea>
+            </div>
+
+            <div class="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-2 pt-2">
+                <button onclick="copyJSONToClipboard()" class="w-full sm:w-auto px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-xs rounded-xl transition touch-target">
+                    <i class="fa-solid fa-copy mr-1"></i> Copiar
+                </button>
+                <div class="flex gap-2">
+                    <button onclick="closeImportModal()" class="flex-1 sm:flex-none px-4 py-2.5 bg-slate-100 text-slate-600 font-semibold text-xs rounded-xl touch-target">Cancelar</button>
+                    <button onclick="importJSONData()" class="flex-1 sm:flex-none px-4 py-2.5 bg-renfe-purple active:bg-renfe-purpleDark text-white font-bold text-xs rounded-xl shadow touch-target">
+                        Restaurar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT LOGIC ENGINE -->
+    <script>
+        const CONFIG_KEY = 'renfe_planner_config_v4';
+        const PROGRESS_KEY = 'renfe_planner_progress_v4';
+
+        const DAY_NAMES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+        const PHASES = [
+            { id: 'initial', name: 'Estudio Inicial', days: 0 },
+            { id: 'r1', name: 'R1 (24h)', days: 1 },
+            { id: 'r2', name: 'R2 (1 sem)', days: 7 },
+            { id: 'r3', name: 'R3 (3 sem)', days: 21 },
+            { id: 'r4', name: 'R4 (2 meses)', days: 60 },
+            { id: 'r5', name: 'R5 (4 meses)', days: 120 }
+        ];
+
+        let config = {
+            totalTopics: 20,
+            startDate: getTodayStr(),
+            pace: 1,
+            restDays: [6, 0], // Saturday and Sunday
+            recalculatesCount: 0
+        };
+
+        let progress = {};
+        let failedDays = new Set();
+        let extraStudyDays = new Set();
+        let dailyIndex = {};
+
+        window.onload = function() {
+            loadStateFromStorage();
+            initFormValues();
+            recalculateFullSchedule();
+        };
+
+        function getTodayStr() {
+            return new Date().toISOString().split('T')[0];
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '-';
+            const [y, m, d] = dateStr.split('-');
+            return `${d}/${m}/${y}`;
+        }
+
+        function addDays(dateObj, days) {
+            let res = new Date(dateObj);
+            res.setDate(res.getDate() + days);
+            return res;
+        }
+
+        function isRestDay(dateObj) {
+            const dayOfWeek = dateObj.getDay();
+            const dateStr = dateObj.toISOString().split('T')[0];
+            if (extraStudyDays.has(dateStr)) return false;
+            return config.restDays.includes(dayOfWeek);
+        }
+
+        function isStudyDay(dateObj) {
+            const dateStr = dateObj.toISOString().split('T')[0];
+            if (failedDays.has(dateStr)) return false;
+            return !isRestDay(dateObj);
+        }
+
+        function adjustToValidStudyDay(dateObj) {
+            let cur = new Date(dateObj);
+            while (!isStudyDay(cur)) {
+                cur.setDate(cur.getDate() + 1);
+            }
+            return cur;
+        }
+
+        function loadStateFromStorage() {
+            const savedConfig = localStorage.getItem(CONFIG_KEY);
+            if (savedConfig) {
+                try { config = { ...config, ...JSON.parse(savedConfig) }; } catch (e) {}
+            }
+
+            const savedProgress = localStorage.getItem(PROGRESS_KEY);
+            if (savedProgress) {
+                try {
+                    const parsed = JSON.parse(savedProgress);
+                    progress = parsed.progress || {};
+                    failedDays = new Set(parsed.failedDays || []);
+                    extraStudyDays = new Set(parsed.extraStudyDays || []);
+                } catch (e) {}
+            }
+        }
+
+        function saveStateToStorage() {
+            localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+            localStorage.setItem(PROGRESS_KEY, JSON.stringify({
+                progress: progress,
+                failedDays: Array.from(failedDays),
+                extraStudyDays: Array.from(extraStudyDays)
+            }));
+        }
+
+        function initFormValues() {
+            document.getElementById('input-topics').value = config.totalTopics;
+            document.getElementById('input-start-date').value = config.startDate || getTodayStr();
+            document.getElementById('input-pace').value = config.pace;
+            document.getElementById('input-rest-days').value = config.restDays.join(',');
+        }
+
+        function toggleConfigAccordion() {
+            const form = document.getElementById('planner-form');
+            const chevron = document.getElementById('config-chevron');
+            if (form.classList.contains('hidden')) {
+                form.classList.remove('hidden');
+                if (chevron) chevron.style.transform = 'rotate(180deg)';
+            } else {
+                form.classList.add('hidden');
+                if (chevron) chevron.style.transform = 'rotate(0deg)';
+            }
+        }
+
+        function saveSettingsAndRecalculate(e) {
+            if (e) e.preventDefault();
+            config.totalTopics = parseInt(document.getElementById('input-topics').value, 10) || 1;
+            config.startDate = document.getElementById('input-start-date').value || getTodayStr();
+            config.pace = parseFloat(document.getElementById('input-pace').value) || 1;
+            config.restDays = document.getElementById('input-rest-days').value.split(',').map(Number);
+            config.recalculatesCount++;
+
+            saveStateToStorage();
+            recalculateFullSchedule();
+            showToast("Calendario recalculado con éxito.");
+
+            if (window.innerWidth < 768) {
+                toggleConfigAccordion();
+            }
+        }
+
+        function recalculateFullSchedule() {
+            dailyIndex = {};
+
+            for (let t = 1; t <= config.totalTopics; t++) {
+                if (!progress[t]) progress[t] = {};
+            }
+
+            let currentStudyDate = adjustToValidStudyDay(new Date(config.startDate));
+
+            for (let t = 1; t <= config.totalTopics; t++) {
+                if (!progress[t]['initial']) progress[t]['initial'] = {};
+
+                if (progress[t]['initial'].status === 'completed' && progress[t]['initial'].completedDate) {
+                    progress[t]['initial'].date = progress[t]['initial'].completedDate;
+                } else {
+                    if (t > 1) {
+                        if (config.pace === 1) {
+                            currentStudyDate.setDate(currentStudyDate.getDate() + 1);
+                            currentStudyDate = adjustToValidStudyDay(currentStudyDate);
+                        } else if (config.pace === 0.5) {
+                            for (let b = 0; b < 2; b++) {
+                                currentStudyDate.setDate(currentStudyDate.getDate() + 1);
+                                currentStudyDate = adjustToValidStudyDay(currentStudyDate);
+                            }
+                        } else if (config.pace === 0.33) {
+                            for (let b = 0; b < 3; b++) {
+                                currentStudyDate.setDate(currentStudyDate.getDate() + 1);
+                                currentStudyDate = adjustToValidStudyDay(currentStudyDate);
+                            }
+                        } else if (config.pace === 2) {
+                            if (t % 2 !== 0) {
+                                currentStudyDate.setDate(currentStudyDate.getDate() + 1);
+                                currentStudyDate = adjustToValidStudyDay(currentStudyDate);
+                            }
+                        }
+                    }
+
+                    progress[t]['initial'].date = currentStudyDate.toISOString().split('T')[0];
+                    if (!progress[t]['initial'].status) progress[t]['initial'].status = 'pending';
+                }
+            }
+
+            let maxDateStr = config.startDate;
+
+            for (let t = 1; t <= config.totalTopics; t++) {
+                let lastPhaseDateObj = new Date(progress[t]['initial'].date);
+
+                for (let i = 1; i < PHASES.length; i++) {
+                    const phase = PHASES[i];
+                    const prevPhase = PHASES[i - 1];
+
+                    if (!progress[t][phase.id]) progress[t][phase.id] = { status: 'pending' };
+
+                    if (progress[t][phase.id].status === 'completed' && progress[t][phase.id].completedDate) {
+                        progress[t][phase.id].date = progress[t][phase.id].completedDate;
+                        lastPhaseDateObj = new Date(progress[t][phase.id].completedDate);
+                    } else {
+                        const gapDays = phase.days - prevPhase.days;
+                        let targetDateObj = addDays(lastPhaseDateObj, gapDays);
+                        
+                        targetDateObj = adjustToValidStudyDay(targetDateObj);
+                        const calcDateStr = targetDateObj.toISOString().split('T')[0];
+
+                        progress[t][phase.id].date = calcDateStr;
+                        lastPhaseDateObj = targetDateObj;
+                    }
+
+                    if (progress[t][phase.id].date > maxDateStr) {
+                        maxDateStr = progress[t][phase.id].date;
+                    }
+                }
+            }
+
+            for (let t = 1; t <= config.totalTopics; t++) {
+                PHASES.forEach(phase => {
+                    const taskInfo = progress[t][phase.id];
+                    if (!taskInfo || !taskInfo.date) return;
+
+                    const dateStr = taskInfo.date;
+                    if (!dailyIndex[dateStr]) dailyIndex[dateStr] = { tasks: [] };
+
+                    dailyIndex[dateStr].tasks.push({
+                        topicNum: t,
+                        phaseId: phase.id,
+                        phaseName: phase.name,
+                        status: taskInfo.status,
+                        completedDate: taskInfo.completedDate || null
+                    });
+                });
+            }
+
+            let iterDate = new Date(config.startDate);
+            const endDate = new Date(maxDateStr);
+            const minFutureDate = addDays(new Date(), 30);
+            const finalRenderDate = endDate > minFutureDate ? endDate : minFutureDate;
+
+            while (iterDate <= finalRenderDate) {
+                const dateStr = iterDate.toISOString().split('T')[0];
+                if (!dailyIndex[dateStr]) dailyIndex[dateStr] = { tasks: [] };
+
+                dailyIndex[dateStr].isRest = isRestDay(iterDate);
+                dailyIndex[dateStr].isFailed = failedDays.has(dateStr);
+                dailyIndex[dateStr].isExtra = extraStudyDays.has(dateStr);
+
+                iterDate.setDate(iterDate.getDate() + 1);
+            }
+
+            saveStateToStorage();
+            updateStatistics();
+            checkOverdueTasks();
+
+            renderDailyView();
+            renderWeeklyView();
+            renderTopicView();
+        }
+
+        function enableRestDayForStudy(dateStr) {
+            extraStudyDays.add(dateStr);
+            failedDays.delete(dateStr);
+            config.recalculatesCount++;
+
+            recalculateFullSchedule();
+            showToast(`¡Día (${formatDate(dateStr)}) activado! Temario reajustado.`);
+        }
+
+        function disableExtraStudyDay(dateStr) {
+            extraStudyDays.delete(dateStr);
+            config.recalculatesCount++;
+
+            recalculateFullSchedule();
+            showToast(`Día (${formatDate(dateStr)}) devuelto a descanso.`);
+        }
+
+        function toggleTaskStatus(topicNum, phaseId, targetDateStr) {
+            const currentTask = progress[topicNum][phaseId];
+            const isCompleted = currentTask.status === 'completed';
+
+            if (!isCompleted) {
+                currentTask.status = 'completed';
+                currentTask.completedDate = targetDateStr;
+
+                const targetObj = new Date(targetDateStr);
+                if (config.restDays.includes(targetObj.getDay()) && !extraStudyDays.has(targetDateStr)) {
+                    extraStudyDays.add(targetDateStr);
+                }
+
+                showToast(`¡Tema ${topicNum} completado!`);
+            } else {
+                currentTask.status = 'pending';
+                delete currentTask.completedDate;
+                showToast(`Tarea pendiente.`);
+            }
+
+            config.recalculatesCount++;
+            recalculateFullSchedule();
+        }
+
+        function toggleFailedDay(dateStr) {
+            if (failedDays.has(dateStr)) {
+                failedDays.delete(dateStr);
+                showToast(`Día desmarcado de fallado.`);
+            } else {
+                failedDays.add(dateStr);
+                extraStudyDays.delete(dateStr);
+                showToast(`Día marcado como no estudiado. Reajustando...`);
+            }
+            config.recalculatesCount++;
+            recalculateFullSchedule();
+        }
+
+        function redistributeOverdueTasks() {
+            const todayStr = getTodayStr();
+            let shiftedCount = 0;
+
+            for (let t = 1; t <= config.totalTopics; t++) {
+                PHASES.forEach(phase => {
+                    const task = progress[t][phase.id];
+                    if (task && task.status === 'pending' && task.date < todayStr) {
+                        let newDateObj = adjustToValidStudyDay(new Date(todayStr));
+                        task.date = newDateObj.toISOString().split('T')[0];
+                        shiftedCount++;
+                    }
+                });
+            }
+
+            config.recalculatesCount++;
+            recalculateFullSchedule();
+            showToast(`Se redistribuyeron ${shiftedCount} tareas atrasadas.`);
+        }
+
+        function checkOverdueTasks() {
+            const todayStr = getTodayStr();
+            let overdueCount = 0;
+
+            for (let t = 1; t <= config.totalTopics; t++) {
+                PHASES.forEach(phase => {
+                    const task = progress[t][phase.id];
+                    if (task && task.status === 'pending' && task.date < todayStr) {
+                        overdueCount++;
+                    }
+                });
+            }
+
+            const banner = document.getElementById('overdue-banner');
+            if (overdueCount > 0) {
+                banner.classList.remove('hidden');
+                document.getElementById('overdue-count-text').textContent = 
+                    `${overdueCount} tarea(s) pendiente(s) atrasada(s)`;
+            } else {
+                banner.classList.add('hidden');
+            }
+        }
+
+        function updateStatistics() {
+            let totalTasks = config.totalTopics * PHASES.length;
+            let completedTasks = 0;
+            let maxDateStr = config.startDate;
+
+            for (let t = 1; t <= config.totalTopics; t++) {
+                PHASES.forEach(phase => {
+                    const task = progress[t][phase.id];
+                    if (task) {
+                        if (task.status === 'completed') completedTasks++;
+                        if (task.date > maxDateStr) maxDateStr = task.date;
+                    }
+                });
+            }
+
+            const pct = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+            document.getElementById('stat-progress-pct').textContent = `${pct}%`;
+            document.getElementById('stat-progress-bar').style.width = `${pct}%`;
+            document.getElementById('stat-completed-count').textContent = `${completedTasks}/${totalTasks}`;
+            document.getElementById('stat-estimated-end').textContent = formatDate(maxDateStr);
+            document.getElementById('stat-recalculates-count').textContent = config.recalculatesCount;
+            document.getElementById('stat-extra-days-count').textContent = `${extraStudyDays.size} d`;
+        }
+
+        // RENDERING VIEWS
+
+        function renderDailyView() {
+            const container = document.getElementById('daily-cards-container');
+            container.innerHTML = '';
+
+            const searchTerm = (document.getElementById('daily-search')?.value || '').toLowerCase();
+            const hideRest = document.getElementById('hide-rest-days')?.checked || false;
+            const hideCompleted = document.getElementById('hide-completed-days')?.checked || false;
+
+            const allDates = Object.keys(dailyIndex).sort();
+            const todayStr = getTodayStr();
+
+            allDates.forEach(dateStr => {
+                const dayData = dailyIndex[dateStr];
+                const dateObj = new Date(dateStr);
+                const dayName = DAY_NAMES[dateObj.getDay()];
+                const isToday = dateStr === todayStr;
+
+                if (hideRest && dayData.isRest && !dayData.isExtra) return;
+
+                const allTasksCompleted = dayData.tasks.length > 0 && dayData.tasks.every(t => t.status === 'completed');
+                if (hideCompleted && allTasksCompleted) return;
+
+                const matchesSearch = dateStr.includes(searchTerm) || formatDate(dateStr).includes(searchTerm) || 
+                    dayName.toLowerCase().includes(searchTerm) ||
+                    dayData.tasks.some(t => `tema ${t.topicNum}`.includes(searchTerm) || t.phaseName.toLowerCase().includes(searchTerm));
+
+                if (!matchesSearch) return;
+
+                const isPastOverdue = dateStr < todayStr && dayData.tasks.some(t => t.status === 'pending');
+
+                const card = document.createElement('div');
+                card.id = `day-card-${dateStr}`;
+                card.className = `p-3.5 sm:p-4 rounded-2xl border transition-all print-card ${
+                    isToday ? 'bg-purple-50/90 border-renfe-purple border-2 shadow-sm' :
+                    isPastOverdue ? 'bg-amber-50/60 border-amber-300' :
+                    dayData.isFailed ? 'bg-red-50/60 border-red-200' :
+                    dayData.isExtra ? 'bg-emerald-50/70 border-emerald-300 shadow-sm' :
+                    dayData.isRest ? 'bg-slate-100/80 border-slate-200 text-slate-500' :
+                    'bg-white border-slate-200 shadow-sm'
+                }`;
+
+                let headerBadges = '';
+                if (isToday) headerBadges += `<span class="bg-renfe-purple text-white font-black text-[9px] sm:text-[10px] px-2 py-0.5 rounded-full uppercase">HOY</span> `;
+                if (dayData.isFailed) headerBadges += `<span class="bg-red-100 text-red-700 font-bold text-[9px] sm:text-[10px] px-2 py-0.5 rounded-full">FALLADO</span> `;
+                else if (dayData.isExtra) headerBadges += `<span class="bg-emerald-600 text-white font-bold text-[9px] sm:text-[10px] px-2 py-0.5 rounded-full"><i class="fa-solid fa-bolt mr-1"></i>APROVECHADO</span> `;
+                else if (dayData.isRest) headerBadges += `<span class="bg-slate-200 text-slate-600 font-bold text-[9px] sm:text-[10px] px-2 py-0.5 rounded-full">DESCANSO</span> `;
+
+                let actionsHtml = `<div class="flex items-center gap-1 no-print">`;
+                if (dayData.isRest && !dayData.isExtra && !dayData.isFailed) {
+                    actionsHtml += `
+                        <button onclick="enableRestDayForStudy('${dateStr}')" class="text-[11px] px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition flex items-center gap-1 touch-target">
+                            <i class="fa-solid fa-circle-plus"></i> Estudiar hoy
+                        </button>
+                    `;
+                } else if (dayData.isExtra) {
+                    actionsHtml += `
+                        <button onclick="disableExtraStudyDay('${dateStr}')" class="text-[10px] px-2 py-1 bg-emerald-100 text-emerald-800 hover:bg-emerald-200 font-semibold rounded-lg transition touch-target">
+                            Deshacer
+                        </button>
+                    `;
+                }
+
+                if (!dayData.isFailed) {
+                    actionsHtml += `
+                        <button onclick="toggleFailedDay('${dateStr}')" class="text-[11px] px-2 py-1 bg-slate-100 hover:bg-red-100 hover:text-red-700 text-slate-600 rounded-lg transition font-medium touch-target" title="Marcar día como no estudiado">
+                            <i class="fa-solid fa-calendar-xmark"></i> Fallé
+                        </button>
+                    `;
+                } else {
+                    actionsHtml += `
+                        <button onclick="toggleFailedDay('${dateStr}')" class="text-[11px] px-2 py-1 bg-red-100 text-red-700 hover:bg-red-200 rounded-lg transition font-medium touch-target">
+                            <i class="fa-solid fa-rotate-left"></i> Restablecer
+                        </button>
+                    `;
+                }
+                actionsHtml += `</div>`;
+
+                let tasksHtml = '';
+                if (dayData.isFailed) {
+                    tasksHtml = `<p class="text-xs text-red-600 font-medium py-1"><i class="fa-solid fa-circle-exclamation mr-1"></i> Día no estudiado. Tareas atrasadas.</p>`;
+                } else if (dayData.isRest && !dayData.isExtra && dayData.tasks.length === 0) {
+                    tasksHtml = `
+                        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 py-1.5">
+                            <p class="text-xs text-slate-500 font-medium"><i class="fa-solid fa-mug-hot text-amber-600 mr-1.5"></i> Día libre de descanso.</p>
+                            <button onclick="enableRestDayForStudy('${dateStr}')" class="text-xs font-bold text-emerald-700 bg-emerald-100/80 px-3 py-1.5 rounded-lg no-print touch-target">
+                                + Usar para estudiar
+                            </button>
+                        </div>
+                    `;
+                } else if (dayData.tasks.length === 0) {
+                    tasksHtml = `<p class="text-xs text-slate-400 italic py-1">Sin repasos programados.</p>`;
+                } else {
+                    tasksHtml = '<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 mt-2">';
+                    dayData.tasks.forEach(t => {
+                        const isDone = t.status === 'completed';
+                        
+                        let badgeColor = "bg-slate-100 border-slate-200 text-slate-800";
+                        if (t.phaseId === 'initial') badgeColor = "bg-purple-100 border-purple-300 text-purple-900 font-bold";
+                        else if (t.phaseId === 'r1') badgeColor = "bg-blue-100 border-blue-300 text-blue-900 font-medium";
+                        else if (t.phaseId === 'r2') badgeColor = "bg-cyan-100 border-cyan-300 text-cyan-900 font-medium";
+                        else if (t.phaseId === 'r3') badgeColor = "bg-amber-100 border-amber-300 text-amber-900 font-medium";
+                        else if (t.phaseId === 'r4') badgeColor = "bg-emerald-100 border-emerald-300 text-emerald-900 font-medium";
+                        else if (t.phaseId === 'r5') badgeColor = "bg-indigo-100 border-indigo-300 text-indigo-900 font-medium";
+
+                        tasksHtml += `
+                            <label class="p-2.5 rounded-xl border ${badgeColor} flex items-center justify-between transition cursor-pointer touch-target ${isDone ? 'opacity-40 line-through bg-slate-100 border-slate-200 text-slate-500' : ''}">
+                                <div class="flex items-center gap-2.5">
+                                    <input type="checkbox" onchange="toggleTaskStatus(${t.topicNum}, '${t.phaseId}', '${dateStr}')" ${isDone ? 'checked' : ''} class="w-5 h-5 rounded text-renfe-purple focus:ring-renfe-purple cursor-pointer no-print">
+                                    <div>
+                                        <p class="font-bold text-xs">Tema ${t.topicNum}</p>
+                                        <p class="text-[10px] opacity-80">${t.phaseName}</p>
+                                    </div>
+                                </div>
+                                ${isDone ? '<i class="fa-solid fa-circle-check text-emerald-600 text-base"></i>' : ''}
+                            </label>
+                        `;
+                    });
+                    tasksHtml += '</div>';
+                }
+
+                card.innerHTML = `
+                    <div class="flex justify-between items-center border-b border-slate-100 pb-2 mb-2">
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                            <span class="font-bold text-xs sm:text-sm text-slate-800">${dayName}</span>
+                            <span class="text-[11px] text-slate-400 font-medium">${formatDate(dateStr)}</span>
+                            ${headerBadges}
+                        </div>
+                        ${actionsHtml}
+                    </div>
+                    ${tasksHtml}
+                `;
+
+                container.appendChild(card);
+            });
+        }
+
+        function renderWeeklyView() {
+            const container = document.getElementById('weekly-container');
+            container.innerHTML = '';
+
+            const allDates = Object.keys(dailyIndex).sort();
+            if (allDates.length === 0) return;
+
+            let weekNum = 1;
+            for (let i = 0; i < allDates.length; i += 7) {
+                const weekDates = allDates.slice(i, i + 7);
+                
+                const weekCard = document.createElement('div');
+                weekCard.className = "bg-white rounded-2xl border border-slate-200 p-3 sm:p-4 shadow-sm space-y-3 print-card";
+
+                let daysGridHtml = '<div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2">';
+
+                weekDates.forEach(dStr => {
+                    const dayData = dailyIndex[dStr];
+                    const dateObj = new Date(dStr);
+                    const dayName = DAY_NAMES[dateObj.getDay()];
+                    const isToday = dStr === getTodayStr();
+
+                    let tasksList = '';
+                    if (dayData.isFailed) {
+                        tasksList = '<div class="text-[10px] text-red-500 font-bold">Fallado</div>';
+                    } else if (dayData.isExtra) {
+                        tasksList = '<div class="text-[10px] text-emerald-700 font-bold mb-1"><i class="fa-solid fa-bolt"></i> Usado</div>';
+                        dayData.tasks.forEach(t => {
+                            const isDone = t.status === 'completed';
+                            tasksList += `
+                                <div class="text-[10px] px-1 py-0.5 rounded border font-semibold truncate mb-1 ${isDone ? 'bg-slate-100 text-slate-400 line-through' : 'bg-emerald-100 text-emerald-900 border-emerald-300'}">
+                                    T${t.topicNum}: ${t.phaseName}
+                                </div>
+                            `;
+                        });
+                    } else if (dayData.isRest) {
+                        tasksList = `
+                            <div class="text-[10px] text-slate-400 italic mb-1">Descanso</div>
+                            <button onclick="enableRestDayForStudy('${dStr}')" class="text-[9px] px-1.5 py-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 rounded font-bold no-print touch-target">+ Estudiar</button>
+                        `;
+                    } else if (dayData.tasks.length === 0) {
+                        tasksList = '<div class="text-[10px] text-slate-300 italic">Libre</div>';
+                    } else {
+                        dayData.tasks.forEach(t => {
+                            const isDone = t.status === 'completed';
+                            tasksList += `
+                                <div class="text-[10px] px-1 py-0.5 rounded border font-semibold truncate mb-1 ${isDone ? 'bg-slate-100 text-slate-400 border-slate-200 line-through' : 'bg-purple-50 text-renfe-purple border-purple-200'}" title="Tema ${t.topicNum} - ${t.phaseName}">
+                                    T${t.topicNum}: ${t.phaseName}
+                                </div>
+                            `;
+                        });
+                    }
+
+                    daysGridHtml += `
+                        <div class="p-2 rounded-xl border text-xs flex flex-col justify-between min-h-[95px] ${
+                            isToday ? 'bg-purple-50 border-renfe-purple border-2' :
+                            dayData.isFailed ? 'bg-red-50/50 border-red-200' :
+                            dayData.isExtra ? 'bg-emerald-50/80 border-emerald-300' :
+                            dayData.isRest ? 'bg-slate-100/70 border-slate-200' : 'bg-white border-slate-200'
+                        }">
+                            <div>
+                                <div class="font-bold text-[11px] border-b border-slate-100 pb-1 mb-1 text-slate-700 flex justify-between items-center">
+                                    <span>${dayName.slice(0,3)} ${isToday ? '⭐' : ''}</span>
+                                    <span class="text-[10px] text-slate-400 font-normal">${formatDate(dStr).slice(0,5)}</span>
+                                </div>
+                                <div>${tasksList}</div>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                daysGridHtml += '</div>';
+
+                weekCard.innerHTML = `
+                    <div class="flex justify-between items-center border-b border-slate-100 pb-2">
+                        <h4 class="font-bold text-xs text-renfe-purple flex items-center gap-1">
+                            <i class="fa-solid fa-calendar-week"></i> Semana ${weekNum}
+                        </h4>
+                        <span class="text-[11px] text-slate-400 font-medium">${formatDate(weekDates[0])} - ${formatDate(weekDates[weekDates.length - 1])}</span>
+                    </div>
+                    ${daysGridHtml}
+                `;
+
+                container.appendChild(weekCard);
+                weekNum++;
+            }
+        }
+
+        function renderTopicView() {
+            const tbody = document.getElementById('topic-table-body');
+            tbody.innerHTML = '';
+
+            for (let t = 1; t <= config.totalTopics; t++) {
+                const topicData = progress[t];
+                if (!topicData) continue;
+
+                const getCellHtml = (phaseId) => {
+                    const phaseInfo = topicData[phaseId];
+                    if (!phaseInfo || !phaseInfo.date) return '-';
+
+                    const isDone = phaseInfo.status === 'completed';
+                    const dateFormatted = formatDate(phaseInfo.date);
+
+                    return `
+                        <div class="flex items-center justify-between gap-1">
+                            <span class="${isDone ? 'line-through text-slate-400' : 'font-semibold text-slate-700'}">${dateFormatted}</span>
+                            <button onclick="toggleTaskStatus(${t}, '${phaseId}', '${phaseInfo.date}')" class="p-1 text-slate-400 hover:text-renfe-purple no-print touch-target">
+                                ${isDone ? '<i class="fa-solid fa-circle-check text-emerald-600 text-sm"></i>' : '<i class="fa-regular fa-circle text-sm"></i>'}
+                            </button>
+                        </div>
+                    `;
+                };
+
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition";
+                tr.innerHTML = `
+                    <td class="p-2.5 sm:p-3 font-bold text-slate-800">Tema ${t}</td>
+                    <td class="p-2.5 sm:p-3 bg-purple-50/50">${getCellHtml('initial')}</td>
+                    <td class="p-2.5 sm:p-3">${getCellHtml('r1')}</td>
+                    <td class="p-2.5 sm:p-3">${getCellHtml('r2')}</td>
+                    <td class="p-2.5 sm:p-3">${getCellHtml('r3')}</td>
+                    <td class="p-2.5 sm:p-3">${getCellHtml('r4')}</td>
+                    <td class="p-2.5 sm:p-3">${getCellHtml('r5')}</td>
+                    <td class="p-2.5 sm:p-3 text-center">
+                        <button onclick="resetTopicProgress(${t})" class="p-1 text-slate-400 hover:text-red-600 transition no-print touch-target" title="Reset Tema ${t}">
+                            <i class="fa-solid fa-rotate-left"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            }
+        }
+
+        function resetTopicProgress(topicNum) {
+            if (confirm(`¿Resetear el Tema ${topicNum}?`)) {
+                progress[topicNum] = {};
+                config.recalculatesCount++;
+                recalculateFullSchedule();
+                showToast(`Progreso del Tema ${topicNum} reiniciado.`);
+            }
+        }
+
+        function jumpToToday() {
+            const todayStr = getTodayStr();
+            const el = document.getElementById(`day-card-${todayStr}`);
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } else {
+                showToast("Hoy se encuentra fuera del rango actual.");
+            }
+        }
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('border-renfe-purple', 'text-renfe-purple', 'font-bold');
+                btn.classList.add('border-transparent', 'text-slate-500');
+            });
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.add('hidden'));
+
+            const activeBtn = document.getElementById(`tab-${tabName}`);
+            if (activeBtn) {
+                activeBtn.classList.remove('border-transparent', 'text-slate-500');
+                activeBtn.classList.add('border-renfe-purple', 'text-renfe-purple', 'font-bold');
+            }
+
+            document.querySelectorAll('.mobile-nav-btn').forEach(btn => {
+                btn.classList.remove('text-renfe-purple', 'font-bold');
+                btn.classList.add('text-slate-400', 'font-semibold');
+            });
+
+            const mobileBtn = document.getElementById(`mobile-nav-${tabName}`);
+            if (mobileBtn) {
+                mobileBtn.classList.remove('text-slate-400', 'font-semibold');
+                mobileBtn.classList.add('text-renfe-purple', 'font-bold');
+            }
+
+            document.getElementById(`content-${tabName}`).classList.remove('hidden');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function showToast(message) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = "pointer-events-auto bg-slate-800 text-white text-xs font-semibold px-3.5 py-2.5 rounded-xl shadow-xl border border-slate-700 flex items-center gap-2 animate-bounce";
+            toast.innerHTML = `<i class="fa-solid fa-bolt text-amber-300 text-sm"></i> <span>${message}</span>`;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        function resetAllData() {
+            if (confirm('¿Deseas restablecer TODA la planificación?')) {
+                localStorage.removeItem(CONFIG_KEY);
+                localStorage.removeItem(PROGRESS_KEY);
+                progress = {};
+                failedDays.clear();
+                extraStudyDays.clear();
+                config.recalculatesCount = 0;
+                initFormValues();
+                recalculateFullSchedule();
+                showToast("Planificación restablecida.");
+            }
+        }
+
+        function openImportModal() {
+            const dataToExport = {
+                config: config,
+                progress: progress,
+                failedDays: Array.from(failedDays),
+                extraStudyDays: Array.from(extraStudyDays)
+            };
+            document.getElementById('json-data-area').value = JSON.stringify(dataToExport, null, 2);
+            document.getElementById('import-modal').classList.remove('hidden');
+        }
+
+        function closeImportModal() {
+            document.getElementById('import-modal').classList.add('hidden');
+        }
+
+        function copyJSONToClipboard() {
+            const textarea = document.getElementById('json-data-area');
+            textarea.select();
+            document.execCommand('copy');
+            showToast("JSON copiado al portapapeles.");
+        }
+
+        function importJSONData() {
+            try {
+                const raw = document.getElementById('json-data-area').value;
+                const parsed = JSON.parse(raw);
+                if (parsed.config) config = parsed.config;
+                if (parsed.progress) progress = parsed.progress;
+                if (parsed.failedDays) failedDays = new Set(parsed.failedDays);
+                if (parsed.extraStudyDays) extraStudyDays = new Set(parsed.extraStudyDays);
+
+                saveStateToStorage();
+                initFormValues();
+                recalculateFullSchedule();
+                closeImportModal();
+                showToast("Datos cargados correctamente.");
+            } catch (e) {
+                alert("Error: Formato JSON no válido.");
+            }
+        }
+
+        function exportCSV() {
+            let csvContent = "data:text/csv;charset=utf-8,Tema,Fase,FechaProgramada,Estado,FechaCompletado\n";
+
+            for (let t = 1; t <= config.totalTopics; t++) {
+                PHASES.forEach(phase => {
+                    const task = progress[t] ? progress[t][phase.id] : null;
+                    if (task) {
+                        const status = task.status === 'completed' ? 'Completado' : 'Pendiente';
+                        const completedDate = task.completedDate || '';
+                        csvContent += `Tema ${t},${phase.name},${task.date},${status},${completedDate}\n`;
+                    }
+                });
+            }
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `Plan_Estudio_Oposiciones_${config.totalTopics}_temas.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+</body>
+</html>
