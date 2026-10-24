@@ -135,21 +135,21 @@
 
             <form id="planner-form" onsubmit="saveSettingsAndRecalculate(event)" class="mt-3 md:mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 hidden md:grid">
                 <div>
-                    <label class="block text-xs font-semibold text-slate-700 mb-1">
+                    <label class="block text-xs font-semibold text-slate-700 mb-1" for="input-topics">
                         <i class="fa-solid fa-book mr-1 text-renfe-purple"></i> Nº Total de Temas
                     </label>
                     <input type="number" id="input-topics" min="1" max="300" value="20" required class="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-renfe-purple focus:outline-none touch-target">
                 </div>
 
                 <div>
-                    <label class="block text-xs font-semibold text-slate-700 mb-1">
+                    <label class="block text-xs font-semibold text-slate-700 mb-1" for="input-start-date">
                         <i class="fa-solid fa-calendar-day mr-1 text-renfe-purple"></i> Fecha Inicio del Plan
                     </label>
                     <input type="date" id="input-start-date" required class="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-renfe-purple focus:outline-none touch-target">
                 </div>
 
                 <div>
-                    <label class="block text-xs font-semibold text-slate-700 mb-1">
+                    <label class="block text-xs font-semibold text-slate-700 mb-1" for="input-pace">
                         <i class="fa-solid fa-gauge-high mr-1 text-renfe-purple"></i> Ritmo Nuevos / Día
                     </label>
                     <select id="input-pace" class="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-renfe-purple focus:outline-none touch-target">
@@ -161,7 +161,7 @@
                 </div>
 
                 <div>
-                    <label class="block text-xs font-semibold text-slate-700 mb-1">
+                    <label class="block text-xs font-semibold text-slate-700 mb-1" for="input-rest-days">
                         <i class="fa-solid fa-bed mr-1 text-renfe-purple"></i> Días de Descanso
                     </label>
                     <select id="input-rest-days" class="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-renfe-purple focus:outline-none touch-target">
@@ -329,7 +329,7 @@
             <p class="text-xs text-slate-600">Copia o restaura el estado completo de tu avance y días de estudio.</p>
 
             <div>
-                <label class="block text-xs font-semibold text-slate-700 mb-1">Datos JSON:</label>
+                <label class="block text-xs font-semibold text-slate-700 mb-1" for="json-data-area">Datos JSON:</label>
                 <textarea id="json-data-area" rows="5" class="w-full p-2.5 text-[11px] font-mono bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-renfe-purple focus:outline-none"></textarea>
             </div>
 
@@ -492,9 +492,8 @@
             for (let t = 1; t <= config.totalTopics; t++) {
                 if (!progress[t]['initial']) progress[t]['initial'] = {};
 
-                if (progress[t]['initial'].status === 'completed' && progress[t]['initial'].completedDate) {
-                    progress[t]['initial'].date = progress[t]['initial'].completedDate;
-                } else {
+                // Mantener la fecha fija si ya se definió previamente
+                if (!progress[t]['initial'].date) {
                     if (t > 1) {
                         if (config.pace === 1) {
                             currentStudyDate.setDate(currentStudyDate.getDate() + 1);
@@ -518,8 +517,9 @@
                     }
 
                     progress[t]['initial'].date = currentStudyDate.toISOString().split('T')[0];
-                    if (!progress[t]['initial'].status) progress[t]['initial'].status = 'pending';
                 }
+
+                if (!progress[t]['initial'].status) progress[t]['initial'].status = 'pending';
             }
 
             let maxDateStr = config.startDate;
@@ -533,10 +533,7 @@
 
                     if (!progress[t][phase.id]) progress[t][phase.id] = { status: 'pending' };
 
-                    if (progress[t][phase.id].status === 'completed' && progress[t][phase.id].completedDate) {
-                        progress[t][phase.id].date = progress[t][phase.id].completedDate;
-                        lastPhaseDateObj = new Date(progress[t][phase.id].completedDate);
-                    } else {
+                    if (!progress[t][phase.id].date) {
                         const gapDays = phase.days - prevPhase.days;
                         let targetDateObj = addDays(lastPhaseDateObj, gapDays);
                         
@@ -545,6 +542,8 @@
 
                         progress[t][phase.id].date = calcDateStr;
                         lastPhaseDateObj = targetDateObj;
+                    } else {
+                        lastPhaseDateObj = new Date(progress[t][phase.id].date);
                     }
 
                     if (progress[t][phase.id].date > maxDateStr) {
@@ -620,12 +619,6 @@
             if (!isCompleted) {
                 currentTask.status = 'completed';
                 currentTask.completedDate = targetDateStr;
-
-                const targetObj = new Date(targetDateStr);
-                if (config.restDays.includes(targetObj.getDay()) && !extraStudyDays.has(targetDateStr)) {
-                    extraStudyDays.add(targetDateStr);
-                }
-
                 showToast(`¡Tema ${topicNum} completado!`);
             } else {
                 currentTask.status = 'pending';
@@ -633,8 +626,22 @@
                 showToast(`Tarea pendiente.`);
             }
 
-            config.recalculatesCount++;
-            recalculateFullSchedule();
+            // Actualizar la tarea en el índice diario local sin desplazar o reasignar otros temas
+            if (dailyIndex[targetDateStr]) {
+                const item = dailyIndex[targetDateStr].tasks.find(t => t.topicNum === topicNum && t.phaseId === phaseId);
+                if (item) {
+                    item.status = currentTask.status;
+                    item.completedDate = currentTask.completedDate || null;
+                }
+            }
+
+            saveStateToStorage();
+            updateStatistics();
+            checkOverdueTasks();
+
+            renderDailyView();
+            renderWeeklyView();
+            renderTopicView();
         }
 
         function toggleFailedDay(dateStr) {
@@ -1073,11 +1080,14 @@
             document.getElementById('import-modal').classList.add('hidden');
         }
 
-        function copyJSONToClipboard() {
+        async function copyJSONToClipboard() {
             const textarea = document.getElementById('json-data-area');
-            textarea.select();
-            document.execCommand('copy');
-            showToast("JSON copiado al portapapeles.");
+            try {
+                await navigator.clipboard.writeText(textarea.value);
+                showToast("JSON copiado al portapapeles.");
+            } catch (err) {
+                showToast("Error al copiar al portapapeles.");
+            }
         }
 
         function importJSONData() {
