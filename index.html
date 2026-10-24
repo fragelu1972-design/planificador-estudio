@@ -492,8 +492,8 @@
             for (let t = 1; t <= config.totalTopics; t++) {
                 if (!progress[t]['initial']) progress[t]['initial'] = {};
 
-                // Solo si la tarea NO está completada, recalculamos su fecha hacia el siguiente día hábil
-                if (progress[t]['initial'].status !== 'completed') {
+                // Mantener la fecha fija si ya se definió previamente
+                if (!progress[t]['initial'].date) {
                     if (t > 1) {
                         if (config.pace === 1) {
                             currentStudyDate.setDate(currentStudyDate.getDate() + 1);
@@ -517,10 +517,6 @@
                     }
 
                     progress[t]['initial'].date = currentStudyDate.toISOString().split('T')[0];
-                } else {
-                    // Mantener la fecha en la que se completó
-                    progress[t]['initial'].date = progress[t]['initial'].completedDate || progress[t]['initial'].date;
-                    currentStudyDate = new Date(progress[t]['initial'].date);
                 }
 
                 if (!progress[t]['initial'].status) progress[t]['initial'].status = 'pending';
@@ -537,7 +533,7 @@
 
                     if (!progress[t][phase.id]) progress[t][phase.id] = { status: 'pending' };
 
-                    if (progress[t][phase.id].status !== 'completed') {
+                    if (!progress[t][phase.id].date) {
                         const gapDays = phase.days - prevPhase.days;
                         let targetDateObj = addDays(lastPhaseDateObj, gapDays);
                         
@@ -547,7 +543,6 @@
                         progress[t][phase.id].date = calcDateStr;
                         lastPhaseDateObj = targetDateObj;
                     } else {
-                        progress[t][phase.id].date = progress[t][phase.id].completedDate || progress[t][phase.id].date;
                         lastPhaseDateObj = new Date(progress[t][phase.id].date);
                     }
 
@@ -631,6 +626,7 @@
                 showToast(`Tarea pendiente.`);
             }
 
+            // Actualizar la tarea en el índice diario local sin desplazar o reasignar otros temas
             if (dailyIndex[targetDateStr]) {
                 const item = dailyIndex[targetDateStr].tasks.find(t => t.topicNum === topicNum && t.phaseId === phaseId);
                 if (item) {
@@ -1128,7 +1124,8 @@
             }
 
             const encodedUri = encodeURI(csvContent);
-            const link.setAttribute("href", encodedUri);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
             link.setAttribute("download", `Plan_Estudio_Oposiciones_${config.totalTopics}_temas.csv`);
             document.body.appendChild(link);
             link.click();
