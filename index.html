@@ -492,34 +492,36 @@
             for (let t = 1; t <= config.totalTopics; t++) {
                 if (!progress[t]['initial']) progress[t]['initial'] = {};
 
-                // Mantener la fecha fija si ya se definió previamente
-                if (!progress[t]['initial'].date) {
-                    if (t > 1) {
-                        if (config.pace === 1) {
+                // RECALCULO AUTOMÁTICO AL FALLAR UN DÍA: 
+                // Limpiamos las fechas guardadas para que se redistribuyan automáticamente paso a paso en días hábiles válidos
+                progress[t]['initial'].date = null;
+                if (!progress[t]['initial'].status) progress[t]['initial'].status = 'pending';
+            }
+
+            for (let t = 1; t <= config.totalTopics; t++) {
+                if (t > 1) {
+                    if (config.pace === 1) {
+                        currentStudyDate.setDate(currentStudyDate.getDate() + 1);
+                        currentStudyDate = adjustToValidStudyDay(currentStudyDate);
+                    } else if (config.pace === 0.5) {
+                        for (let b = 0; b < 2; b++) {
                             currentStudyDate.setDate(currentStudyDate.getDate() + 1);
                             currentStudyDate = adjustToValidStudyDay(currentStudyDate);
-                        } else if (config.pace === 0.5) {
-                            for (let b = 0; b < 2; b++) {
-                                currentStudyDate.setDate(currentStudyDate.getDate() + 1);
-                                currentStudyDate = adjustToValidStudyDay(currentStudyDate);
-                            }
-                        } else if (config.pace === 0.33) {
-                            for (let b = 0; b < 3; b++) {
-                                currentStudyDate.setDate(currentStudyDate.getDate() + 1);
-                                currentStudyDate = adjustToValidStudyDay(currentStudyDate);
-                            }
-                        } else if (config.pace === 2) {
-                            if (t % 2 !== 0) {
-                                currentStudyDate.setDate(currentStudyDate.getDate() + 1);
-                                currentStudyDate = adjustToValidStudyDay(currentStudyDate);
-                            }
+                        }
+                    } else if (config.pace === 0.33) {
+                        for (let b = 0; b < 3; b++) {
+                            currentStudyDate.setDate(currentStudyDate.getDate() + 1);
+                            currentStudyDate = adjustToValidStudyDay(currentStudyDate);
+                        }
+                    } else if (config.pace === 2) {
+                        if (t % 2 !== 0) {
+                            currentStudyDate.setDate(currentStudyDate.getDate() + 1);
+                            currentStudyDate = adjustToValidStudyDay(currentStudyDate);
                         }
                     }
-
-                    progress[t]['initial'].date = currentStudyDate.toISOString().split('T')[0];
                 }
 
-                if (!progress[t]['initial'].status) progress[t]['initial'].status = 'pending';
+                progress[t]['initial'].date = currentStudyDate.toISOString().split('T')[0];
             }
 
             let maxDateStr = config.startDate;
@@ -533,22 +535,21 @@
 
                     if (!progress[t][phase.id]) progress[t][phase.id] = { status: 'pending' };
 
-                    if (!progress[t][phase.id].date) {
-                        const gapDays = phase.days - prevPhase.days;
-                        let targetDateObj = addDays(lastPhaseDateObj, gapDays);
-                        
-                        targetDateObj = adjustToValidStudyDay(targetDateObj);
-                        const calcDateStr = targetDateObj.toISOString().split('T')[0];
+                    const gapDays = phase.days - prevPhase.days;
+                    let targetDateObj = addDays(lastPhaseDateObj, gapDays);
+                    
+                    targetDateObj = adjustToValidStudyDay(targetDateObj);
+                    const calcDateStr = targetDateObj.toISOString().split('T')[0];
 
-                        progress[t][phase.id].date = calcDateStr;
-                        lastPhaseDateObj = targetDateObj;
-                    } else {
-                        lastPhaseDateObj = new Date(progress[t][phase.id].date);
-                    }
+                    progress[t][phase.id].date = calcDateStr;
+                    lastPhaseDateObj = targetDateObj;
 
                     if (progress[t][phase.id].date > maxDateStr) {
                         maxDateStr = progress[t][phase.id].date;
                     }
+                }
+                if (progress[t]['initial'].date > maxDateStr) {
+                    maxDateStr = progress[t]['initial'].date;
                 }
             }
 
@@ -626,7 +627,6 @@
                 showToast(`Tarea pendiente.`);
             }
 
-            // Actualizar la tarea en el índice diario local sin desplazar o reasignar otros temas
             if (dailyIndex[targetDateStr]) {
                 const item = dailyIndex[targetDateStr].tasks.find(t => t.topicNum === topicNum && t.phaseId === phaseId);
                 if (item) {
@@ -651,7 +651,7 @@
             } else {
                 failedDays.add(dateStr);
                 extraStudyDays.delete(dateStr);
-                showToast(`Día marcado como no estudiado. Reajustando...`);
+                showToast(`Día marcado como no estudiado. ¡Recalculando desplazamiento!`);
             }
             config.recalculatesCount++;
             recalculateFullSchedule();
@@ -805,7 +805,7 @@
 
                 let tasksHtml = '';
                 if (dayData.isFailed) {
-                    tasksHtml = `<p class="text-xs text-red-600 font-medium py-1"><i class="fa-solid fa-circle-exclamation mr-1"></i> Día no estudiado. Tareas atrasadas.</p>`;
+                    tasksHtml = `<p class="text-xs text-red-600 font-medium py-1"><i class="fa-solid fa-circle-exclamation mr-1"></i> Día fallado. El contenido se ha desplazado automáticamente al siguiente día hábil.</p>`;
                 } else if (dayData.isRest && !dayData.isExtra && dayData.tasks.length === 0) {
                     tasksHtml = `
                         <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 py-1.5">
