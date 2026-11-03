@@ -40,13 +40,12 @@
             touch-action: manipulation;
         }
         
-        /* Custom Mobile Scrollbars */
+        /* Custom Scrollbars */
         ::-webkit-scrollbar { height: 4px; width: 4px; }
         ::-webkit-scrollbar-track { background: #f1f5f9; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
-        /* Ensure interactive minimum touch targets */
         .touch-target {
             min-height: 44px;
             min-width: 44px;
@@ -74,7 +73,7 @@
                 </div>
                 <div class="min-w-0">
                     <h1 class="text-sm sm:text-base font-bold leading-tight truncate">Planificador de Oposiciones</h1>
-                    <p class="text-[10px] sm:text-[11px] text-purple-200 truncate">Adaptativo y Móvil 100%</p>
+                    <p class="text-[10px] sm:text-[11px] text-purple-200 truncate">Adelanto + Posposición inteligente</p>
                 </div>
             </div>
             
@@ -110,16 +109,16 @@
                     </div>
                     <div>
                         <h2 class="text-xs sm:text-sm font-bold text-amber-900" id="overdue-count-text">Tienes tareas pendientes atrasadas</h2>
-                        <p class="text-[11px] sm:text-xs text-amber-700">Redistribúyelas para ajustar el resto de repasos.</p>
+                        <p class="text-[11px] sm:text-xs text-amber-700">Pospón en bloque todas las pendientes al día de hoy.</p>
                     </div>
                 </div>
                 <button onclick="redistributeOverdueTasks()" class="w-full sm:w-auto px-4 py-2.5 bg-amber-600 active:bg-amber-700 text-white text-xs font-bold rounded-xl shadow transition flex items-center justify-center gap-2 touch-target shrink-0">
-                    <i class="fa-solid fa-wand-magic-sparkles"></i> Redistribuir Atrasos
+                    <i class="fa-solid fa-forward-step"></i> Reubicar Atrasos a Hoy
                 </button>
             </div>
         </section>
 
-        <!-- Formulario de Configuración / Acordeón en Móvil -->
+        <!-- Formulario de Configuración -->
         <section id="config-section" class="bg-white rounded-2xl p-3.5 sm:p-5 shadow-sm border border-slate-200/90 no-print transition-all">
             <div class="flex justify-between items-center cursor-pointer md:cursor-default" onclick="if(window.innerWidth < 768) toggleConfigAccordion()">
                 <h2 class="text-xs sm:text-sm font-bold text-slate-800 flex items-center gap-2">
@@ -182,13 +181,13 @@
                     </div>
                     
                     <button type="submit" class="w-full sm:w-auto px-5 py-2.5 bg-renfe-purple active:bg-renfe-purpleDark text-white font-bold text-xs rounded-xl shadow transition-all flex items-center justify-center gap-2 touch-target">
-                        <i class="fa-solid fa-arrows-rotate"></i> Recalcular Plan
+                        <i class="fa-solid fa-arrows-rotate"></i> Regenerar Plan Base
                     </button>
                 </div>
             </form>
         </section>
 
-        <!-- Estadísticas de Ajuste Adaptativo -->
+        <!-- Estadísticas -->
         <section class="bg-white rounded-2xl p-3 sm:p-4 shadow-sm border border-slate-200">
             <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 sm:gap-3 text-center">
                 <div class="p-2 sm:p-2.5 bg-purple-50 rounded-xl border border-purple-100 flex flex-col justify-center">
@@ -325,14 +324,14 @@
                 </h3>
                 <button onclick="closeAdvanceModal()" class="w-8 h-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center touch-target"><i class="fa-solid fa-xmark"></i></button>
             </div>
-            <p class="text-xs text-slate-600">Selecciona un tema que quieras adelantar a esta fecha. El planificador reestructurará el resto de temas automáticamente.</p>
+            <p class="text-xs text-slate-600">Selecciona un tema futuro para adelantarlo a esta fecha. El motor recalculará sus repasos a partir del nuevo día de estudio.</p>
             <div>
                 <label class="block text-xs font-semibold text-slate-700 mb-1" for="select-topic-to-advance">Tema a adelantar:</label>
                 <select id="select-topic-to-advance" class="w-full p-2.5 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-renfe-purple focus:outline-none"></select>
             </div>
             <div class="flex justify-end gap-2 pt-2">
                 <button onclick="closeAdvanceModal()" class="px-4 py-2 bg-slate-100 text-slate-600 font-semibold text-xs rounded-xl touch-target">Cancelar</button>
-                <button onclick="confirmAdvanceTopic()" class="px-4 py-2 bg-renfe-purple active:bg-renfe-purpleDark text-white font-bold text-xs rounded-xl shadow touch-target">Adelantar y Reestructurar</button>
+                <button onclick="confirmAdvanceTopic()" class="px-4 py-2 bg-renfe-purple active:bg-renfe-purpleDark text-white font-bold text-xs rounded-xl shadow touch-target">Adelantar y Recalcular</button>
             </div>
         </div>
     </div>
@@ -370,8 +369,8 @@
 
     <!-- JAVASCRIPT LOGIC ENGINE -->
     <script>
-        const CONFIG_KEY = 'renfe_planner_config_v5';
-        const PROGRESS_KEY = 'renfe_planner_progress_v5';
+        const CONFIG_KEY = 'renfe_planner_config_v13';
+        const PROGRESS_KEY = 'renfe_planner_progress_v13';
 
         const DAY_NAMES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
         const PHASES = [
@@ -387,12 +386,11 @@
             totalTopics: 20,
             startDate: getTodayStr(),
             pace: 1,
-            restDays: [6, 0], // Saturday and Sunday
-            recalculatesCount: 0,
-            advancedDates: {} // Mapeo de tema -> fecha forzada de estudio inicial
+            restDays: [6, 0], // Sábado y Domingo
+            recalculatesCount: 0
         };
 
-        let progress = {};
+        let progress = {}; 
         let failedDays = new Set();
         let extraStudyDays = new Set();
         let dailyIndex = {};
@@ -401,7 +399,11 @@
         window.onload = function() {
             loadStateFromStorage();
             initFormValues();
-            recalculateFullSchedule();
+            if (Object.keys(progress).length === 0) {
+                generateInitialSchedule();
+            } else {
+                buildDailyIndex();
+            }
         };
 
         function getTodayStr() {
@@ -446,7 +448,6 @@
             if (savedConfig) {
                 try { config = { ...config, ...JSON.parse(savedConfig) }; } catch (e) {}
             }
-            if (!config.advancedDates) config.advancedDates = {};
 
             const savedProgress = localStorage.getItem(PROGRESS_KEY);
             if (savedProgress) {
@@ -495,133 +496,66 @@
             config.restDays = document.getElementById('input-rest-days').value.split(',').map(Number);
             config.recalculatesCount++;
 
-            saveStateToStorage();
-            recalculateFullSchedule();
-            showToast("Calendario recalculado con éxito.");
+            generateInitialSchedule();
+            showToast("Planificación regenerada.");
 
             if (window.innerWidth < 768) {
                 toggleConfigAccordion();
             }
         }
 
-        function recalculateFullSchedule() {
-            dailyIndex = {};
-
-            for (let t = 1; t <= config.totalTopics; t++) {
-                if (!progress[t]) progress[t] = {};
-            }
-
+        // GENERAR CALENDARIO BASE SECUENCIAL
+        function generateInitialSchedule() {
+            progress = {};
             let currentStudyDate = adjustToValidStudyDay(new Date(config.startDate));
+            let subPaceCounter = 0;
 
             for (let t = 1; t <= config.totalTopics; t++) {
-                if (!progress[t]['initial']) progress[t]['initial'] = {};
-                progress[t]['initial'].date = null;
-                if (!progress[t]['initial'].status) progress[t]['initial'].status = 'pending';
-            }
+                progress[t] = {};
+                
+                let initDateStr = currentStudyDate.toISOString().split('T')[0];
+                progress[t]['initial'] = { date: initDateStr, status: 'pending' };
 
-            // Asignación de fechas iniciales respetando fechas avanzadas y ritmo
-            for (let t = 1; t <= config.totalTopics; t++) {
-                if (config.advancedDates[t]) {
-                    currentStudyDate = adjustToValidStudyDay(new Date(config.advancedDates[t]));
-                } else if (t > 1) {
-                    if (config.pace === 1) {
-                        currentStudyDate.setDate(currentStudyDate.getDate() + 1);
-                        currentStudyDate = adjustToValidStudyDay(currentStudyDate);
-                    } else if (config.pace === 0.5) {
-                        for (let b = 0; b < 2; b++) {
-                            currentStudyDate.setDate(currentStudyDate.getDate() + 1);
-                            currentStudyDate = adjustToValidStudyDay(currentStudyDate);
-                        }
-                    } else if (config.pace === 0.33) {
-                        for (let b = 0; b < 3; b++) {
-                            currentStudyDate.setDate(currentStudyDate.getDate() + 1);
-                            currentStudyDate = adjustToValidStudyDay(currentStudyDate);
-                        }
-                    } else if (config.pace === 2) {
-                        if (t % 2 !== 0) {
-                            currentStudyDate.setDate(currentStudyDate.getDate() + 1);
-                            currentStudyDate = adjustToValidStudyDay(currentStudyDate);
-                        }
-                    }
-                }
-
-                // Evitar solapamiento si hay una fecha avanzada previa
-                progress[t]['initial'].date = currentStudyDate.toISOString().split('T')[0];
-            }
-
-            let maxDateStr = config.startDate;
-
-            for (let t = 1; t <= config.totalTopics; t++) {
-                let lastPhaseDateObj = new Date(progress[t]['initial'].date);
-
+                let lastDateObj = new Date(currentStudyDate);
                 for (let i = 1; i < PHASES.length; i++) {
                     const phase = PHASES[i];
                     const prevPhase = PHASES[i - 1];
-
-                    if (!progress[t][phase.id]) progress[t][phase.id] = { status: 'pending' };
-
                     const gapDays = phase.days - prevPhase.days;
-                    let targetDateObj = addDays(lastPhaseDateObj, gapDays);
                     
-                    targetDateObj = adjustToValidStudyDay(targetDateObj);
-                    const calcDateStr = targetDateObj.toISOString().split('T')[0];
+                    let targetObj = addDays(lastDateObj, gapDays);
+                    targetObj = adjustToValidStudyDay(targetObj);
+                    
+                    progress[t][phase.id] = { date: targetObj.toISOString().split('T')[0], status: 'pending' };
+                    lastDateObj = targetObj;
+                }
 
-                    progress[t][phase.id].date = calcDateStr;
-                    lastPhaseDateObj = targetDateObj;
-
-                    if (progress[t][phase.id].date > maxDateStr) {
-                        maxDateStr = progress[t][phase.id].date;
+                if (config.pace === 1) {
+                    currentStudyDate.setDate(currentStudyDate.getDate() + 1);
+                    currentStudyDate = adjustToValidStudyDay(currentStudyDate);
+                } else if (config.pace === 0.5) {
+                    for (let b = 0; b < 2; b++) {
+                        currentStudyDate.setDate(currentStudyDate.getDate() + 1);
+                        currentStudyDate = adjustToValidStudyDay(currentStudyDate);
                     }
+                } else if (config.pace === 0.33) {
+                    for (let b = 0; b < 3; b++) {
+                        currentStudyDate.setDate(currentStudyDate.getDate() + 1);
+                        currentStudyDate = adjustToValidStudyDay(currentStudyDate);
+                    }
+                } else if (config.pace === 2) {
+                    if (subPaceCounter % 2 === 0) {
+                        currentStudyDate.setDate(currentStudyDate.getDate() + 1);
+                        currentStudyDate = adjustToValidStudyDay(currentStudyDate);
+                    }
+                    subPaceCounter++;
                 }
-                if (progress[t]['initial'].date > maxDateStr) {
-                    maxDateStr = progress[t]['initial'].date;
-                }
-            }
-
-            for (let t = 1; t <= config.totalTopics; t++) {
-                PHASES.forEach(phase => {
-                    const taskInfo = progress[t][phase.id];
-                    if (!taskInfo || !taskInfo.date) return;
-
-                    const dateStr = taskInfo.date;
-                    if (!dailyIndex[dateStr]) dailyIndex[dateStr] = { tasks: [] };
-
-                    dailyIndex[dateStr].tasks.push({
-                        topicNum: t,
-                        phaseId: phase.id,
-                        phaseName: phase.name,
-                        status: taskInfo.status,
-                        completedDate: taskInfo.completedDate || null
-                    });
-                });
-            }
-
-            let iterDate = new Date(config.startDate);
-            const endDate = new Date(maxDateStr);
-            const minFutureDate = addDays(new Date(), 30);
-            const finalRenderDate = endDate > minFutureDate ? endDate : minFutureDate;
-
-            while (iterDate <= finalRenderDate) {
-                const dateStr = iterDate.toISOString().split('T')[0];
-                if (!dailyIndex[dateStr]) dailyIndex[dateStr] = { tasks: [] };
-
-                dailyIndex[dateStr].isRest = isRestDay(iterDate);
-                dailyIndex[dateStr].isFailed = failedDays.has(dateStr);
-                dailyIndex[dateStr].isExtra = extraStudyDays.has(dateStr);
-
-                iterDate.setDate(iterDate.getDate() + 1);
             }
 
             saveStateToStorage();
-            updateStatistics();
-            checkOverdueTasks();
-
-            renderDailyView();
-            renderWeeklyView();
-            renderTopicView();
+            buildDailyIndex();
         }
 
-        // FUNCIONES DE ADELANTAR TEMA
+        // 1. FUNCIÓN PARA ADELANTAR UN TEMA FUTURO A UNA FECHA CONCRETA
         function openAdvanceModal(dateStr) {
             currentModalDateStr = dateStr;
             document.getElementById('advance-modal-date-label').textContent = formatDate(dateStr);
@@ -629,21 +563,23 @@
             const select = document.getElementById('select-topic-to-advance');
             select.innerHTML = '';
 
+            let hasOptions = false;
             for (let t = 1; t <= config.totalTopics; t++) {
                 const initDate = progress[t]?.['initial']?.date || '';
-                // Listar temas cuyo estudio inicial sea posterior a la fecha seleccionada o que no estén ya completados
+                // Permitir elegir temas programados para fechas posteriores a la seleccionada
                 if (initDate > dateStr) {
                     const opt = document.createElement('option');
                     opt.value = t;
-                    opt.textContent = `Tema ${t} (Programado inicialmente el ${formatDate(initDate)})`;
+                    opt.textContent = `Tema ${t} (Programado actualmente para ${formatDate(initDate)})`;
                     select.appendChild(opt);
+                    hasOptions = true;
                 }
             }
 
-            if (select.options.length === 0) {
+            if (!hasOptions) {
                 const opt = document.createElement('option');
                 opt.value = "";
-                opt.textContent = "No hay temas posteriores disponibles para adelantar.";
+                opt.textContent = "No hay temas futuros disponibles para adelantar a esta fecha.";
                 select.appendChild(opt);
             }
 
@@ -664,30 +600,131 @@
                 return;
             }
 
-            config.advancedDates[topicNum] = currentModalDateStr;
-            config.recalculatesCount++;
+            // Asignar nueva fecha de estudio inicial adelantada
+            let newInitDateObj = new Date(currentModalDateStr);
+            let targetInitDay = adjustToValidStudyDay(newInitDateObj);
+            let newInitDateStr = targetInitDay.toISOString().split('T')[0];
 
+            progress[topicNum]['initial'].date = newInitDateStr;
+
+            // Recalcular las fases R1-R5 de este tema adelantado a partir de la nueva fecha
+            let lastDateObj = new Date(targetInitDay);
+            for (let i = 1; i < PHASES.length; i++) {
+                const phase = PHASES[i];
+                const prevPhase = PHASES[i - 1];
+                const gapDays = phase.days - prevPhase.days;
+
+                let targetObj = addDays(lastDateObj, gapDays);
+                targetObj = adjustToValidStudyDay(targetObj);
+                progress[topicNum][phase.id].date = targetObj.toISOString().split('T')[0];
+                lastDateObj = targetObj;
+            }
+
+            config.recalculatesCount++;
             saveStateToStorage();
-            recalculateFullSchedule();
+            buildDailyIndex();
             closeAdvanceModal();
-            showToast(`¡Tema ${topicNum} adelantado al ${formatDate(currentModalDateStr)}! Plan reestructurado.`);
+            showToast(`¡Tema ${topicNum} adelantado al ${formatDate(newInitDateStr)}! Repasos recalculados.`);
+        }
+
+        // 2. FUNCIÓN PARA POSPONER UNA TAREA AL SIGUIENTE DÍA HÁBIL
+        function shiftTaskToNextDay(topicNum, phaseId) {
+            const task = progress[topicNum] && progress[topicNum][phaseId];
+            if (!task || !task.date) return;
+
+            let curDate = new Date(task.date);
+            curDate.setDate(curDate.getDate() + 1);
+            let nextValid = adjustToValidStudyDay(curDate);
+            let newDateStr = nextValid.toISOString().split('T')[0];
+
+            task.date = newDateStr;
+
+            // Si se pospone el estudio inicial, empujamos proporcionalmente los repasos en cadena
+            if (phaseId === 'initial') {
+                let lastDateObj = new Date(nextValid);
+                for (let i = 1; i < PHASES.length; i++) {
+                    const phase = PHASES[i];
+                    const prevPhase = PHASES[i - 1];
+                    const gapDays = phase.days - prevPhase.days;
+
+                    let targetObj = addDays(lastDateObj, gapDays);
+                    targetObj = adjustToValidStudyDay(targetObj);
+                    progress[topicNum][phase.id].date = targetObj.toISOString().split('T')[0];
+                    lastDateObj = targetObj;
+                }
+            }
+
+            config.recalculatesCount++;
+            saveStateToStorage();
+            buildDailyIndex();
+            showToast(`Tema ${topicNum} pospuesto al ${formatDate(newDateStr)}.`);
+        }
+
+        // RECONSTRUCCIÓN DEL ÍNDICE DIARIO
+        function buildDailyIndex() {
+            dailyIndex = {};
+            let maxDateStr = config.startDate;
+
+            for (let t = 1; t <= config.totalTopics; t++) {
+                if (!progress[t]) continue;
+                PHASES.forEach(phase => {
+                    const taskInfo = progress[t][phase.id];
+                    if (!taskInfo || !taskInfo.date) return;
+
+                    const dateStr = taskInfo.date;
+                    if (!dailyIndex[dateStr]) dailyIndex[dateStr] = { tasks: [] };
+
+                    dailyIndex[dateStr].tasks.push({
+                        topicNum: t,
+                        phaseId: phase.id,
+                        phaseName: phase.name,
+                        status: taskInfo.status,
+                        completedDate: taskInfo.completedDate || null
+                    });
+
+                    if (dateStr > maxDateStr) maxDateStr = dateStr;
+                });
+            }
+
+            let iterDate = new Date(config.startDate);
+            let endDate = new Date(maxDateStr);
+            const minFutureDate = addDays(new Date(), 30);
+            let finalRenderDate = endDate > minFutureDate ? endDate : minFutureDate;
+
+            while (iterDate <= finalRenderDate) {
+                const dateStr = iterDate.toISOString().split('T')[0];
+                if (!dailyIndex[dateStr]) dailyIndex[dateStr] = { tasks: [] };
+
+                dailyIndex[dateStr].isRest = isRestDay(iterDate);
+                dailyIndex[dateStr].isFailed = failedDays.has(dateStr);
+                dailyIndex[dateStr].isExtra = extraStudyDays.has(dateStr);
+
+                iterDate.setDate(iterDate.getDate() + 1);
+            }
+
+            updateStatistics();
+            checkOverdueTasks();
+
+            renderDailyView();
+            renderWeeklyView();
+            renderTopicView();
         }
 
         function enableRestDayForStudy(dateStr) {
             extraStudyDays.add(dateStr);
             failedDays.delete(dateStr);
             config.recalculatesCount++;
-
-            recalculateFullSchedule();
-            showToast(`¡Día (${formatDate(dateStr)}) activado! Temario reajustado.`);
+            saveStateToStorage();
+            buildDailyIndex();
+            showToast(`Día (${formatDate(dateStr)}) habilitado para estudio.`);
         }
 
         function disableExtraStudyDay(dateStr) {
             extraStudyDays.delete(dateStr);
             config.recalculatesCount++;
-
-            recalculateFullSchedule();
-            showToast(`Día (${formatDate(dateStr)}) devuelto a descanso.`);
+            saveStateToStorage();
+            buildDailyIndex();
+            showToast(`Día devuelto a descanso.`);
         }
 
         function toggleTaskStatus(topicNum, phaseId, targetDateStr) {
@@ -704,34 +741,28 @@
                 showToast(`Tarea pendiente.`);
             }
 
-            if (dailyIndex[targetDateStr]) {
-                const item = dailyIndex[targetDateStr].tasks.find(t => t.topicNum === topicNum && t.phaseId === phaseId);
-                if (item) {
-                    item.status = currentTask.status;
-                    item.completedDate = currentTask.completedDate || null;
-                }
-            }
-
             saveStateToStorage();
-            updateStatistics();
-            checkOverdueTasks();
-
-            renderDailyView();
-            renderWeeklyView();
-            renderTopicView();
+            buildDailyIndex();
         }
 
         function toggleFailedDay(dateStr) {
             if (failedDays.has(dateStr)) {
                 failedDays.delete(dateStr);
-                showToast(`Día desmarcado de fallado.`);
+                showToast(`Día desmarcado.`);
             } else {
                 failedDays.add(dateStr);
                 extraStudyDays.delete(dateStr);
-                showToast(`Día marcado como no estudiado. ¡Recalculando desplazamiento!`);
+                
+                if (dailyIndex[dateStr] && dailyIndex[dateStr].tasks) {
+                    dailyIndex[dateStr].tasks.forEach(t => {
+                        shiftTaskToNextDay(t.topicNum, t.phaseId);
+                    });
+                }
+                showToast(`Día pospuesto al siguiente día hábil.`);
             }
             config.recalculatesCount++;
-            recalculateFullSchedule();
+            saveStateToStorage();
+            buildDailyIndex();
         }
 
         function redistributeOverdueTasks() {
@@ -742,16 +773,16 @@
                 PHASES.forEach(phase => {
                     const task = progress[t][phase.id];
                     if (task && task.status === 'pending' && task.date < todayStr) {
-                        let newDateObj = adjustToValidStudyDay(new Date(todayStr));
-                        task.date = newDateObj.toISOString().split('T')[0];
+                        shiftTaskToNextDay(t, phase.id);
                         shiftedCount++;
                     }
                 });
             }
 
             config.recalculatesCount++;
-            recalculateFullSchedule();
-            showToast(`Se redistribuyeron ${shiftedCount} tareas atrasadas.`);
+            saveStateToStorage();
+            buildDailyIndex();
+            showToast(`Se pospusieron ${shiftedCount} tareas atrasadas.`);
         }
 
         function checkOverdueTasks() {
@@ -778,14 +809,15 @@
         }
 
         function updateStatistics() {
-            let totalTasks = config.totalTopics * PHASES.length;
+            let totalTasks = 0;
             let completedTasks = 0;
             let maxDateStr = config.startDate;
 
             for (let t = 1; t <= config.totalTopics; t++) {
                 PHASES.forEach(phase => {
                     const task = progress[t][phase.id];
-                    if (task) {
+                    if (task && task.date) {
+                        totalTasks++;
                         if (task.status === 'completed') completedTasks++;
                         if (task.date > maxDateStr) maxDateStr = task.date;
                     }
@@ -801,8 +833,7 @@
             document.getElementById('stat-extra-days-count').textContent = `${extraStudyDays.size} d`;
         }
 
-        // RENDERING VIEWS
-
+        // RENDERIZADO DE VISTAS
         function renderDailyView() {
             const container = document.getElementById('daily-cards-container');
             container.innerHTML = '';
@@ -846,13 +877,13 @@
 
                 let headerBadges = '';
                 if (isToday) headerBadges += `<span class="bg-renfe-purple text-white font-black text-[9px] sm:text-[10px] px-2 py-0.5 rounded-full uppercase">HOY</span> `;
-                if (dayData.isFailed) headerBadges += `<span class="bg-red-100 text-red-700 font-bold text-[9px] sm:text-[10px] px-2 py-0.5 rounded-full">FALLADO</span> `;
+                if (dayData.isFailed) headerBadges += `<span class="bg-red-100 text-red-700 font-bold text-[9px] sm:text-[10px] px-2 py-0.5 rounded-full">POSPUESTO</span> `;
                 else if (dayData.isExtra) headerBadges += `<span class="bg-emerald-600 text-white font-bold text-[9px] sm:text-[10px] px-2 py-0.5 rounded-full"><i class="fa-solid fa-bolt mr-1"></i>APROVECHADO</span> `;
                 else if (dayData.isRest) headerBadges += `<span class="bg-slate-200 text-slate-600 font-bold text-[9px] sm:text-[10px] px-2 py-0.5 rounded-full">DESCANSO</span> `;
 
                 let actionsHtml = `<div class="flex items-center gap-1.5 no-print flex-wrap justify-end">`;
                 
-                // Botón Adelantar Tema (en cualquier día válido de estudio o hoy/futuro)
+                // Botón de Adelantar Tema en la cabecera de cada día
                 if (!dayData.isFailed) {
                     actionsHtml += `
                         <button onclick="openAdvanceModal('${dateStr}')" class="text-[11px] px-2.5 py-1 bg-purple-100 hover:bg-purple-200 text-renfe-purple font-bold rounded-xl transition flex items-center gap-1 touch-target" title="Adelantar un tema futuro a esta fecha">
@@ -877,8 +908,8 @@
 
                 if (!dayData.isFailed) {
                     actionsHtml += `
-                        <button onclick="toggleFailedDay('${dateStr}')" class="text-[11px] px-2 py-1 bg-slate-100 hover:bg-red-100 hover:text-red-700 text-slate-600 rounded-lg transition font-medium touch-target" title="Marcar día como no estudiado">
-                            <i class="fa-solid fa-calendar-xmark"></i> Fallé
+                        <button onclick="toggleFailedDay('${dateStr}')" class="text-[11px] px-2 py-1 bg-slate-100 hover:bg-red-100 hover:text-red-700 text-slate-600 rounded-lg transition font-medium touch-target" title="Posponer este día entero">
+                            <i class="fa-solid fa-calendar-xmark"></i> Posponer día
                         </button>
                     `;
                 } else {
@@ -892,7 +923,7 @@
 
                 let tasksHtml = '';
                 if (dayData.isFailed) {
-                    tasksHtml = `<p class="text-xs text-red-600 font-medium py-1"><i class="fa-solid fa-circle-exclamation mr-1"></i> Día fallado. El contenido se ha desplazado automáticamente al siguiente día hábil.</p>`;
+                    tasksHtml = `<p class="text-xs text-red-600 font-medium py-1"><i class="fa-solid fa-circle-exclamation mr-1"></i> Día pospuesto. Tareas reubicadas al siguiente día hábil.</p>`;
                 } else if (dayData.isRest && !dayData.isExtra && dayData.tasks.length === 0) {
                     tasksHtml = `
                         <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 py-1.5">
@@ -918,16 +949,20 @@
                         else if (t.phaseId === 'r5') badgeColor = "bg-indigo-100 border-indigo-300 text-indigo-900 font-medium";
 
                         tasksHtml += `
-                            <label class="p-2.5 rounded-xl border ${badgeColor} flex items-center justify-between transition cursor-pointer touch-target ${isDone ? 'opacity-40 line-through bg-slate-100 border-slate-200 text-slate-500' : ''}">
-                                <div class="flex items-center gap-2.5">
+                            <div class="p-2.5 rounded-xl border ${badgeColor} flex items-center justify-between transition ${isDone ? 'opacity-40 line-through bg-slate-100 border-slate-200 text-slate-500' : ''}">
+                                <label class="flex items-center gap-2.5 cursor-pointer flex-1">
                                     <input type="checkbox" onchange="toggleTaskStatus(${t.topicNum}, '${t.phaseId}', '${dateStr}')" ${isDone ? 'checked' : ''} class="w-5 h-5 rounded text-renfe-purple focus:ring-renfe-purple cursor-pointer no-print">
                                     <div>
                                         <p class="font-bold text-xs">Tema ${t.topicNum}</p>
                                         <p class="text-[10px] opacity-80">${t.phaseName}</p>
                                     </div>
+                                </label>
+                                <div class="flex items-center gap-1 no-print">
+                                    <button onclick="shiftTaskToNextDay(${t.topicNum}, '${t.phaseId}')" class="text-slate-500 hover:text-amber-600 p-1.5 transition touch-target" title="Posponer al día siguiente (+1 día)">
+                                        <i class="fa-solid fa-arrow-right text-sm"></i>
+                                    </button>
                                 </div>
-                                ${isDone ? '<i class="fa-solid fa-circle-check text-emerald-600 text-base"></i>' : ''}
-                            </label>
+                            </div>
                         `;
                     });
                     tasksHtml += '</div>';
@@ -973,7 +1008,7 @@
 
                     let tasksList = '';
                     if (dayData.isFailed) {
-                        tasksList = '<div class="text-[10px] text-red-500 font-bold">Fallado</div>';
+                        tasksList = '<div class="text-[10px] text-red-500 font-bold">Pospuesto</div>';
                     } else if (dayData.isExtra) {
                         tasksList = '<div class="text-[10px] text-emerald-700 font-bold mb-1"><i class="fa-solid fa-bolt"></i> Usado</div>';
                         dayData.tasks.forEach(t => {
@@ -1055,9 +1090,14 @@
                     return `
                         <div class="flex items-center justify-between gap-1">
                             <span class="${isDone ? 'line-through text-slate-400' : 'font-semibold text-slate-700'}">${dateFormatted}</span>
-                            <button onclick="toggleTaskStatus(${t}, '${phaseId}', '${phaseInfo.date}')" class="p-1 text-slate-400 hover:text-renfe-purple no-print touch-target">
-                                ${isDone ? '<i class="fa-solid fa-circle-check text-emerald-600 text-sm"></i>' : '<i class="fa-regular fa-circle text-sm"></i>'}
-                            </button>
+                            <div class="flex items-center gap-1 no-print">
+                                <button onclick="toggleTaskStatus(${t}, '${phaseId}', '${phaseInfo.date}')" class="p-1 text-slate-400 hover:text-renfe-purple touch-target" title="Completar">
+                                    ${isDone ? '<i class="fa-solid fa-circle-check text-emerald-600 text-sm"></i>' : '<i class="fa-regular fa-circle text-sm"></i>'}
+                                </button>
+                                <button onclick="shiftTaskToNextDay(${t}, '${phaseId}')" class="p-1 text-slate-500 hover:text-amber-600 touch-target" title="Posponer al día siguiente">
+                                    <i class="fa-solid fa-arrow-right text-xs"></i>
+                                </button>
+                            </div>
                         </div>
                     `;
                 };
@@ -1065,7 +1105,7 @@
                 const tr = document.createElement('tr');
                 tr.className = "hover:bg-slate-50 transition";
                 tr.innerHTML = `
-                    <td class="p-2.5 sm:p-3 font-bold text-slate-800">Tema ${t} ${config.advancedDates[t] ? '<span class="text-[9px] bg-purple-100 text-renfe-purple px-1.5 py-0.5 rounded font-semibold">Adelantado</span>' : ''}</td>
+                    <td class="p-2.5 sm:p-3 font-bold text-slate-800">Tema ${t}</td>
                     <td class="p-2.5 sm:p-3 bg-purple-50/50">${getCellHtml('initial')}</td>
                     <td class="p-2.5 sm:p-3">${getCellHtml('r1')}</td>
                     <td class="p-2.5 sm:p-3">${getCellHtml('r2')}</td>
@@ -1073,7 +1113,7 @@
                     <td class="p-2.5 sm:p-3">${getCellHtml('r4')}</td>
                     <td class="p-2.5 sm:p-3">${getCellHtml('r5')}</td>
                     <td class="p-2.5 sm:p-3 text-center">
-                        <button onclick="resetTopicProgress(${t})" class="p-1 text-slate-400 hover:text-red-600 transition no-print touch-target" title="Reset Tema ${t}">
+                        <button onclick="resetTopicProgress(${t})" class="p-1 text-slate-400 hover:text-red-600 transition no-print touch-target" title="Reiniciar Tema ${t}">
                             <i class="fa-solid fa-rotate-left"></i>
                         </button>
                     </td>
@@ -1083,12 +1123,9 @@
         }
 
         function resetTopicProgress(topicNum) {
-            if (confirm(`¿Resetear el Tema ${topicNum}?`)) {
-                delete config.advancedDates[topicNum];
-                progress[topicNum] = {};
-                config.recalculatesCount++;
-                recalculateFullSchedule();
-                showToast(`Progreso del Tema ${topicNum} reiniciado.`);
+            if (confirm(`¿Reiniciar las fechas del Tema ${topicNum}?`)) {
+                generateInitialSchedule();
+                showToast(`Tema ${topicNum} restablecido.`);
             }
         }
 
@@ -1146,10 +1183,9 @@
                 progress = {};
                 failedDays.clear();
                 extraStudyDays.clear();
-                config.advancedDates = {};
                 config.recalculatesCount = 0;
                 initFormValues();
-                recalculateFullSchedule();
+                generateInitialSchedule();
                 showToast("Planificación restablecida.");
             }
         }
@@ -1184,14 +1220,13 @@
                 const raw = document.getElementById('json-data-area').value;
                 const parsed = JSON.parse(raw);
                 if (parsed.config) config = parsed.config;
-                if (!config.advancedDates) config.advancedDates = {};
                 if (parsed.progress) progress = parsed.progress;
                 if (parsed.failedDays) failedDays = new Set(parsed.failedDays);
                 if (parsed.extraStudyDays) extraStudyDays = new Set(parsed.extraStudyDays);
 
                 saveStateToStorage();
                 initFormValues();
-                recalculateFullSchedule();
+                buildDailyIndex();
                 closeImportModal();
                 showToast("Datos cargados correctamente.");
             } catch (e) {
@@ -1205,7 +1240,7 @@
             for (let t = 1; t <= config.totalTopics; t++) {
                 PHASES.forEach(phase => {
                     const task = progress[t] ? progress[t][phase.id] : null;
-                    if (task) {
+                    if (task && task.date) {
                         const status = task.status === 'completed' ? 'Completado' : 'Pendiente';
                         const completedDate = task.completedDate || '';
                         csvContent += `Tema ${t},${phase.name},${task.date},${status},${completedDate}\n`;
