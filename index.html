@@ -316,7 +316,28 @@
         </button>
     </nav>
 
-    <!-- Modal Importación / Exportación JSON (Mobile Bottom Sheet Style) -->
+    <!-- Modal Adelantar Tema -->
+    <div id="advance-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4 no-print">
+        <div class="bg-white rounded-2xl max-w-md w-full p-4 sm:p-5 shadow-2xl border border-slate-200 space-y-4">
+            <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                <h3 class="font-bold text-slate-800 text-xs sm:text-sm flex items-center gap-2">
+                    <i class="fa-solid fa-forward-step text-renfe-purple"></i> Adelantar Tema al <span id="advance-modal-date-label"></span>
+                </h3>
+                <button onclick="closeAdvanceModal()" class="w-8 h-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center touch-target"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <p class="text-xs text-slate-600">Selecciona un tema que quieras adelantar a esta fecha. El planificador reestructurará el resto de temas automáticamente.</p>
+            <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1" for="select-topic-to-advance">Tema a adelantar:</label>
+                <select id="select-topic-to-advance" class="w-full p-2.5 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-renfe-purple focus:outline-none"></select>
+            </div>
+            <div class="flex justify-end gap-2 pt-2">
+                <button onclick="closeAdvanceModal()" class="px-4 py-2 bg-slate-100 text-slate-600 font-semibold text-xs rounded-xl touch-target">Cancelar</button>
+                <button onclick="confirmAdvanceTopic()" class="px-4 py-2 bg-renfe-purple active:bg-renfe-purpleDark text-white font-bold text-xs rounded-xl shadow touch-target">Adelantar y Reestructurar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Importación / Exportación JSON -->
     <div id="import-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-end sm:items-center justify-center p-0 sm:p-4 no-print">
         <div class="bg-white rounded-t-3xl sm:rounded-2xl max-w-lg w-full p-4 sm:p-5 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] overflow-y-auto">
             <div class="flex justify-between items-center border-b border-slate-100 pb-3">
@@ -349,8 +370,8 @@
 
     <!-- JAVASCRIPT LOGIC ENGINE -->
     <script>
-        const CONFIG_KEY = 'renfe_planner_config_v4';
-        const PROGRESS_KEY = 'renfe_planner_progress_v4';
+        const CONFIG_KEY = 'renfe_planner_config_v5';
+        const PROGRESS_KEY = 'renfe_planner_progress_v5';
 
         const DAY_NAMES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
         const PHASES = [
@@ -367,13 +388,15 @@
             startDate: getTodayStr(),
             pace: 1,
             restDays: [6, 0], // Saturday and Sunday
-            recalculatesCount: 0
+            recalculatesCount: 0,
+            advancedDates: {} // Mapeo de tema -> fecha forzada de estudio inicial
         };
 
         let progress = {};
         let failedDays = new Set();
         let extraStudyDays = new Set();
         let dailyIndex = {};
+        let currentModalDateStr = null;
 
         window.onload = function() {
             loadStateFromStorage();
@@ -423,6 +446,7 @@
             if (savedConfig) {
                 try { config = { ...config, ...JSON.parse(savedConfig) }; } catch (e) {}
             }
+            if (!config.advancedDates) config.advancedDates = {};
 
             const savedProgress = localStorage.getItem(PROGRESS_KEY);
             if (savedProgress) {
@@ -491,15 +515,15 @@
 
             for (let t = 1; t <= config.totalTopics; t++) {
                 if (!progress[t]['initial']) progress[t]['initial'] = {};
-
-                // RECALCULO AUTOMÁTICO AL FALLAR UN DÍA: 
-                // Limpiamos las fechas guardadas para que se redistribuyan automáticamente paso a paso en días hábiles válidos
                 progress[t]['initial'].date = null;
                 if (!progress[t]['initial'].status) progress[t]['initial'].status = 'pending';
             }
 
+            // Asignación de fechas iniciales respetando fechas avanzadas y ritmo
             for (let t = 1; t <= config.totalTopics; t++) {
-                if (t > 1) {
+                if (config.advancedDates[t]) {
+                    currentStudyDate = adjustToValidStudyDay(new Date(config.advancedDates[t]));
+                } else if (t > 1) {
                     if (config.pace === 1) {
                         currentStudyDate.setDate(currentStudyDate.getDate() + 1);
                         currentStudyDate = adjustToValidStudyDay(currentStudyDate);
@@ -521,6 +545,7 @@
                     }
                 }
 
+                // Evitar solapamiento si hay una fecha avanzada previa
                 progress[t]['initial'].date = currentStudyDate.toISOString().split('T')[0];
             }
 
@@ -594,6 +619,58 @@
             renderDailyView();
             renderWeeklyView();
             renderTopicView();
+        }
+
+        // FUNCIONES DE ADELANTAR TEMA
+        function openAdvanceModal(dateStr) {
+            currentModalDateStr = dateStr;
+            document.getElementById('advance-modal-date-label').textContent = formatDate(dateStr);
+            
+            const select = document.getElementById('select-topic-to-advance');
+            select.innerHTML = '';
+
+            for (let t = 1; t <= config.totalTopics; t++) {
+                const initDate = progress[t]?.['initial']?.date || '';
+                // Listar temas cuyo estudio inicial sea posterior a la fecha seleccionada o que no estén ya completados
+                if (initDate > dateStr) {
+                    const opt = document.createElement('option');
+                    opt.value = t;
+                    opt.textContent = `Tema ${t} (Programado inicialmente el ${formatDate(initDate)})`;
+                    select.appendChild(opt);
+                }
+            }
+
+            if (select.options.length === 0) {
+                const opt = document.createElement('option');
+                opt.value = "";
+                opt.textContent = "No hay temas posteriores disponibles para adelantar.";
+                select.appendChild(opt);
+            }
+
+            document.getElementById('advance-modal').classList.remove('hidden');
+        }
+
+        function closeAdvanceModal() {
+            document.getElementById('advance-modal').classList.add('hidden');
+            currentModalDateStr = null;
+        }
+
+        function confirmAdvanceTopic() {
+            const select = document.getElementById('select-topic-to-advance');
+            const topicNum = parseInt(select.value, 10);
+
+            if (!topicNum || isNaN(topicNum)) {
+                alert("Por favor, selecciona un tema válido.");
+                return;
+            }
+
+            config.advancedDates[topicNum] = currentModalDateStr;
+            config.recalculatesCount++;
+
+            saveStateToStorage();
+            recalculateFullSchedule();
+            closeAdvanceModal();
+            showToast(`¡Tema ${topicNum} adelantado al ${formatDate(currentModalDateStr)}! Plan reestructurado.`);
         }
 
         function enableRestDayForStudy(dateStr) {
@@ -773,7 +850,17 @@
                 else if (dayData.isExtra) headerBadges += `<span class="bg-emerald-600 text-white font-bold text-[9px] sm:text-[10px] px-2 py-0.5 rounded-full"><i class="fa-solid fa-bolt mr-1"></i>APROVECHADO</span> `;
                 else if (dayData.isRest) headerBadges += `<span class="bg-slate-200 text-slate-600 font-bold text-[9px] sm:text-[10px] px-2 py-0.5 rounded-full">DESCANSO</span> `;
 
-                let actionsHtml = `<div class="flex items-center gap-1 no-print">`;
+                let actionsHtml = `<div class="flex items-center gap-1.5 no-print flex-wrap justify-end">`;
+                
+                // Botón Adelantar Tema (en cualquier día válido de estudio o hoy/futuro)
+                if (!dayData.isFailed) {
+                    actionsHtml += `
+                        <button onclick="openAdvanceModal('${dateStr}')" class="text-[11px] px-2.5 py-1 bg-purple-100 hover:bg-purple-200 text-renfe-purple font-bold rounded-xl transition flex items-center gap-1 touch-target" title="Adelantar un tema futuro a esta fecha">
+                            <i class="fa-solid fa-forward-step"></i> Adelantar tema
+                        </button>
+                    `;
+                }
+
                 if (dayData.isRest && !dayData.isExtra && !dayData.isFailed) {
                     actionsHtml += `
                         <button onclick="enableRestDayForStudy('${dateStr}')" class="text-[11px] px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition flex items-center gap-1 touch-target">
@@ -847,7 +934,7 @@
                 }
 
                 card.innerHTML = `
-                    <div class="flex justify-between items-center border-b border-slate-100 pb-2 mb-2">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-100 pb-2 mb-2 gap-2">
                         <div class="flex items-center gap-1.5 flex-wrap">
                             <span class="font-bold text-xs sm:text-sm text-slate-800">${dayName}</span>
                             <span class="text-[11px] text-slate-400 font-medium">${formatDate(dateStr)}</span>
@@ -978,7 +1065,7 @@
                 const tr = document.createElement('tr');
                 tr.className = "hover:bg-slate-50 transition";
                 tr.innerHTML = `
-                    <td class="p-2.5 sm:p-3 font-bold text-slate-800">Tema ${t}</td>
+                    <td class="p-2.5 sm:p-3 font-bold text-slate-800">Tema ${t} ${config.advancedDates[t] ? '<span class="text-[9px] bg-purple-100 text-renfe-purple px-1.5 py-0.5 rounded font-semibold">Adelantado</span>' : ''}</td>
                     <td class="p-2.5 sm:p-3 bg-purple-50/50">${getCellHtml('initial')}</td>
                     <td class="p-2.5 sm:p-3">${getCellHtml('r1')}</td>
                     <td class="p-2.5 sm:p-3">${getCellHtml('r2')}</td>
@@ -997,6 +1084,7 @@
 
         function resetTopicProgress(topicNum) {
             if (confirm(`¿Resetear el Tema ${topicNum}?`)) {
+                delete config.advancedDates[topicNum];
                 progress[topicNum] = {};
                 config.recalculatesCount++;
                 recalculateFullSchedule();
@@ -1058,6 +1146,7 @@
                 progress = {};
                 failedDays.clear();
                 extraStudyDays.clear();
+                config.advancedDates = {};
                 config.recalculatesCount = 0;
                 initFormValues();
                 recalculateFullSchedule();
@@ -1095,6 +1184,7 @@
                 const raw = document.getElementById('json-data-area').value;
                 const parsed = JSON.parse(raw);
                 if (parsed.config) config = parsed.config;
+                if (!config.advancedDates) config.advancedDates = {};
                 if (parsed.progress) progress = parsed.progress;
                 if (parsed.failedDays) failedDays = new Set(parsed.failedDays);
                 if (parsed.extraStudyDays) extraStudyDays = new Set(parsed.extraStudyDays);
